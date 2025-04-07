@@ -1,24 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Task Management Application
 
-## Getting Started
+A modern task management application built with Next.js, TypeScript, Tailwind CSS, and Supabase.
 
-First, run the development server:
+## Features
 
+- Create, update, and manage tasks
+- Real-time task status updates
+- Clean and modern UI with Tailwind CSS
+- Type-safe development with TypeScript
+- Secure data storage with Supabase
+
+## Prerequisites
+
+- Node.js 18+ and npm
+- Supabase account
+
+## Setup
+
+1. Clone the repository:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <repository-url>
+cd whatsnext
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Create a Supabase project:
+   - Go to [Supabase](https://supabase.com)
+   - Create a new project
+   - Create a new table called `tasks` with the following schema:
+     ```sql
+     create table tasks (
+       id uuid default uuid_generate_v4() primary key,
+       created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+       title text not null,
+       description text,
+       status text default 'todo'::text not null,
+       due_date timestamp with time zone,
+       user_id uuid not null
+     );
+     ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Configure environment variables:
+   - Copy `.env.local` to `.env.local`
+   - Update the values with your Supabase project URL and anon key
+
+5. Run the development server:
+```bash
+npm run dev
+```
+
+6. Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+## Deployment
+
+This application can be deployed to Vercel with the following steps:
+
+1. Push your code to a Git repository
+2. Connect your repository to Vercel
+3. Add your environment variables in the Vercel project settings
+4. Deploy!
+
+## Tech Stack
+
+- [Next.js](https://nextjs.org/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Supabase](https://supabase.com/)
+- [React Hook Form](https://react-hook-form.com/)
+- [Zod](https://github.com/colinhacks/zod)
+- [date-fns](https://date-fns.org/)
 
 ## Learn More
 
