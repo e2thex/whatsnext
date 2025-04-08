@@ -7,7 +7,7 @@
 | ✓ | Task Hierarchy | As a user, I want items with 1 level of sub-tasks to be labeled as "Missions" so I can understand their scope |
 | ✓ | Task Hierarchy | As a user, I want items with 2 levels of sub-tasks to be labeled as "Objectives" so I can see their intermediate complexity |
 | ✓ | Task Hierarchy | As a user, I want top-level items to be labeled as "Ambitions" so I know what overarching goal they support |
-| ✓ | Task Hierarchy | As a user, I want to be able to manually label an item as a "Mission" or "Objective" even if it doesn't yet have subtasks so I can plan ahead |
+| ✓ | Task Hierarchy | As a user, I want to be able to manually set or change an item's type through an intuitive dropdown menu, regardless of its hierarchy position, so I can properly categorize my tasks as my planning evolves |
 | ✓ | Task Organization | As a user, I want items to be prioritized within their parent so I can control execution order in context |
 | ✓ | Task Organization | As a user, I want to create a task by selecting its parent in a top-down manner so that my tasks are organized logically |
 | ✓ | Task Organization | As a user, I want to be able to drag and drop tasks to reorder them within their parent so that I can quickly adjust priorities |
@@ -38,6 +38,7 @@
 | ✓ | User Interface | As a user, I want a clean, modern interface with proper spacing so that I can focus on my tasks without distraction |
 | ✓ | User Interface | As a user, I want smooth transitions and visual feedback so that I can understand the results of my actions |
 | ✓ | User Interface | As a user, I want to see the count of blocking and blocked tasks through prominent colored indicators (red for blocked by, green for blocking) so I can quickly understand task dependencies |
+| ✓ | User Interface | As a user, I want dependency indicators to display numerical counts, with red circles showing the number of items blocking a task and green circles showing the number of items that the task is blocking, so I can instantly see dependency relationships without opening menus |
 | ✓ | User Interface | As a user, I want a more compact layout without borders around tasks and reduced whitespace between items so I can see more tasks at once while maintaining clarity |
 | ✓ | User Interface | As a user, I want line breaks in task descriptions to be preserved so I can format my notes with proper spacing and structure |
 | ✓ | User Interface | As a user, I want each task type to have a distinct and intuitive icon (checkbox for Task, document for Mission, flag for Objective, rocket for Ambition) so I can quickly identify task types at a glance |

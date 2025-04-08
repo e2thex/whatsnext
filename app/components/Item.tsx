@@ -103,6 +103,7 @@ export function Item({
     : item.title)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isDependencyMenuOpen, setIsDependencyMenuOpen] = useState(false)
+  const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false)
   const [isDependencySelectionOpen, setIsDependencySelectionOpen] = useState(false)
   const [isDateDependencyOpen, setIsDateDependencyOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(
@@ -112,6 +113,8 @@ export function Item({
   const contentInputRef = useRef<HTMLTextAreaElement>(null)
   const dependencyMenuRef = useRef<HTMLDivElement>(null)
   const dependencyButtonRef = useRef<HTMLButtonElement>(null)
+  const typeMenuRef = useRef<HTMLDivElement>(null)
+  const typeButtonRef = useRef<HTMLDivElement>(null)
 
   // Automatically focus content input for new/empty items
   useEffect(() => {
@@ -156,6 +159,34 @@ export function Item({
       document.documentElement.style.setProperty('--menu-left', menuLeft)
     }
   }, [isDependencyMenuOpen])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        isTypeMenuOpen &&
+        typeMenuRef.current &&
+        !typeMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsTypeMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isTypeMenuOpen])
+
+  useEffect(() => {
+    if (isTypeMenuOpen && typeButtonRef.current) {
+      const buttonRect = typeButtonRef.current.getBoundingClientRect()
+      const menuTop = `${buttonRect.bottom + window.scrollY}px`
+      const menuLeft = `${buttonRect.left + window.scrollX}px`
+      
+      document.documentElement.style.setProperty('--type-menu-top', menuTop)
+      document.documentElement.style.setProperty('--type-menu-left', menuLeft)
+    }
+  }, [isTypeMenuOpen])
 
   const handleContentSubmit = () => {
     const contentLines = editedContent.split('\n')
@@ -266,6 +297,14 @@ export function Item({
   // Get the title and description from the current item for display
   const displayTitle = item.title
   const displayDescription = item.description
+  
+  // Determine the effective type to display based on automatic or manual setting
+  const effectiveType = item.type || (() => {
+    // This replicates the automatic type calculation logic
+    if (!hasChildren) return 'Task' as ItemType
+    if (childCount === 0) return 'Task' as ItemType
+    return 'Mission' as ItemType // Default for items with children when auto-calculated
+  })()
 
   return (
     <div className={`
@@ -366,25 +405,29 @@ export function Item({
                     <span className="font-medium cursor-text hover:text-gray-600">
                       {displayTitle}
                     </span>
-                    {item.type && (
-                      <div className="relative group/tooltip">
-                        <div className={`
-                          p-1 rounded-full inline-flex items-center justify-center
-                          ${typeColors[item.type as keyof typeof typeColors]}
-                          ${item.manual_type ? `ring-1 ${typeRingColors[item.type as keyof typeof typeRingColors]}` : ''}
+                    <div className="relative group/tooltip">
+                      <div
+                        ref={typeButtonRef}
+                        onClick={(e) => {
+                          e.stopPropagation() // Prevent triggering the parent's onClick
+                          setIsTypeMenuOpen(!isTypeMenuOpen)
+                        }} 
+                        className={`
+                          p-1 rounded-full inline-flex items-center justify-center cursor-pointer
+                          ${typeColors[effectiveType as keyof typeof typeColors]}
+                          ${item.manual_type ? `ring-1 ${typeRingColors[effectiveType as keyof typeof typeRingColors]}` : ''}
                         `}>
-                          {typeIcons[item.type as keyof typeof typeIcons]}
-                        </div>
-                        {/* Tooltip that appears on hover */}
-                        <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 translate-y-full 
-                                        opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 
-                                        pointer-events-none z-10">
-                          <div className="bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
-                            {item.type} {item.manual_type && '(Manual)'}
-                          </div>
+                        {typeIcons[effectiveType as keyof typeof typeIcons]}
+                      </div>
+                      {/* Tooltip that appears on hover */}
+                      <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 translate-y-full 
+                                      opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 
+                                      pointer-events-none z-10">
+                        <div className="bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
+                          {effectiveType} {item.manual_type ? '(Manual)' : '(Auto)'}
                         </div>
                       </div>
-                    )}
+                    </div>
                   </div>
                   {displayDescription && (
                     <p className="mt-1 text-sm text-gray-600 cursor-text hover:text-gray-700 whitespace-pre-wrap break-words">
@@ -402,18 +445,6 @@ export function Item({
           </div>
 
           <div className="flex items-center gap-2">
-            <select
-              value={item.type || 'auto'}
-              onChange={(e) => onTypeChange(item.id, e.target.value === 'auto' ? null : e.target.value as ItemType)}
-              className="text-sm border border-gray-300 rounded px-2 py-1"
-            >
-              <option value="auto">Auto</option>
-              <option value="Task">Task</option>
-              <option value="Mission">Mission</option>
-              <option value="Objective">Objective</option>
-              <option value="Ambition">Ambition</option>
-            </select>
-
             <div className="flex gap-1">
               <button
                 onClick={() => onMoveItem(item.id, 'up')}
@@ -477,6 +508,69 @@ export function Item({
           </div>
         )}
       </div>
+
+      {/* Type menu dropdown */}
+      {isTypeMenuOpen && typeof document !== 'undefined' && createPortal(
+        <div 
+          ref={typeMenuRef}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            transform: 'translate(var(--type-menu-left), var(--type-menu-top))',
+          }}
+          className="w-32 bg-white rounded-lg shadow-lg z-[9999] border border-gray-200"
+        >
+          <div className="p-1">
+            <button 
+              onClick={() => {
+                onTypeChange(item.id, null)
+                setIsTypeMenuOpen(false)
+              }}
+              className={`w-full text-left px-2 py-1 rounded text-sm ${!item.type ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
+            >
+              Auto
+            </button>
+            <button 
+              onClick={() => {
+                onTypeChange(item.id, 'Task' as ItemType)
+                setIsTypeMenuOpen(false)
+              }}
+              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Task' as ItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
+            >
+              Task
+            </button>
+            <button 
+              onClick={() => {
+                onTypeChange(item.id, 'Mission' as ItemType)
+                setIsTypeMenuOpen(false)
+              }}
+              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Mission' as ItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
+            >
+              Mission
+            </button>
+            <button 
+              onClick={() => {
+                onTypeChange(item.id, 'Objective' as ItemType)
+                setIsTypeMenuOpen(false)
+              }}
+              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Objective' as ItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
+            >
+              Objective
+            </button>
+            <button 
+              onClick={() => {
+                onTypeChange(item.id, 'Ambition' as ItemType)
+                setIsTypeMenuOpen(false)
+              }}
+              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Ambition' as ItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
+            >
+              Ambition
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
 
       <DeleteConfirmationDialog
         isOpen={isDeleteDialogOpen}
