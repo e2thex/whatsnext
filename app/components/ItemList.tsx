@@ -71,6 +71,7 @@ export interface ItemListProps {
   viewMode: 'tree' | 'list'
   showOnlyActionable: boolean
   showOnlyBlocked: boolean
+  completionFilter: 'all' | 'completed' | 'not-completed'
 }
 
 export function ItemList({ 
@@ -92,7 +93,8 @@ export function ItemList({
   focusedItemId,
   viewMode,
   showOnlyActionable,
-  showOnlyBlocked
+  showOnlyBlocked,
+  completionFilter
 }: ItemListProps) {
   const itemsByParent = useMemo(() => {
     const map = new Map<string | null, ItemRow[]>()
@@ -209,12 +211,18 @@ export function ItemList({
     // Get items for this parent
     const baseItems = itemsByParent.get(parentId) || []
     
-    // Filter items based on actionable/blocked status
+    // Filter items based on actionable/blocked status and completion status
     const filteredItems = baseItems.filter(item => {
       const blocked = isItemBlocked(item)
-      return (!showOnlyActionable && !showOnlyBlocked) || // Show all
-             (showOnlyActionable && !blocked) || // Show only unblocked
-             (showOnlyBlocked && blocked) // Show only blocked
+      const blockFilter = (!showOnlyActionable && !showOnlyBlocked) || // Show all
+                          (showOnlyActionable && !blocked) || // Show only unblocked
+                          (showOnlyBlocked && blocked); // Show only blocked
+      
+      const completionFilterResult = completionFilter === 'all' || 
+                                    (completionFilter === 'completed' && item.completed) ||
+                                    (completionFilter === 'not-completed' && !item.completed);
+      
+      return blockFilter && completionFilterResult;
     })
     
     // Custom sort function that puts items in position order
@@ -287,9 +295,15 @@ export function ItemList({
     // Apply filters
     const filteredTasks = tasksToShow.filter(task => {
       const isBlocked = isItemBlocked(task)
-      return (!showOnlyActionable && !showOnlyBlocked) || // Show all
-             (showOnlyActionable && !isBlocked) || // Show only unblocked
-             (showOnlyBlocked && isBlocked) // Show only blocked
+      const blockFilter = (!showOnlyActionable && !showOnlyBlocked) || // Show all
+                          (showOnlyActionable && !isBlocked) || // Show only unblocked
+                          (showOnlyBlocked && isBlocked); // Show only blocked
+      
+      const completionFilterResult = completionFilter === 'all' || 
+                                    (completionFilter === 'completed' && task.completed) ||
+                                    (completionFilter === 'not-completed' && !task.completed);
+      
+      return blockFilter && completionFilterResult;
     })
 
     // Calculate ancestral paths for sorting

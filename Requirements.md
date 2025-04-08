@@ -29,6 +29,7 @@
 | | Task States | As a user, I want to assign statuses to tasks including "Stand By", "OnDeck", and "Blocked" so I can manage readiness |
 | | Task States | As a user, I want a "Blocked" task to have a review date when it will resurface for reassessment |
 | ✓ | Task Filtering | As a user, I want to be able to filter to show only actionable (unblocked) tasks in both tree and list views so that I can focus on what I can work on right now |
+| ✓ | Task Filtering | As a user, I want to be able to toggle between viewing all tasks, only completed tasks, or only uncompleted tasks, with uncompleted tasks being the default view, so I can focus on tasks that need my attention |
 | ✓ | Authentication | As a user, I want to be able to sign up for an account so that I can keep my tasks private and accessible |
 | ✓ | Authentication | As a user, I want to be able to log in to access my tasks so that I can work on them from anywhere |
 | ✓ | Authentication | As a user, I want my tasks to be private and only accessible to me so that I can maintain confidentiality |
@@ -51,7 +52,6 @@
 | | Task Progress | As a user, I want to see progress of parent tasks based on child task completion so that I can understand overall progress |
 | | Task Dates | As a user, I want to be able to set due dates for tasks so that I can manage deadlines and priorities |
 | | Task Filtering | As a user, I want to be able to filter tasks by type so that I can focus on specific levels of work |
-| | Task Filtering | As a user, I want to be able to filter tasks by completion status so that I can manage my active work |
 | | Task Search | As a user, I want to be able to search for tasks by title or description so that I can quickly find relevant items |
 | | Task States | As a user, I want to toggle the visibility of completed tasks within a focused view so that I can manage scope and attention |
 | | Task Types | As a user, I want each item to support both sub-tasks and questions so I can track execution and unknowns in one place |
