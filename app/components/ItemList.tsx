@@ -337,6 +337,7 @@ export function ItemList({
                 (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase().trim()))
               )
             }
+            searchQuery={searchQuery}
           >
             {itemChildren}
           </Item>
@@ -525,6 +526,7 @@ export function ItemList({
                       (task.description && task.description.toLowerCase().includes(searchQuery.toLowerCase().trim()))
                     )
                   }
+                  searchQuery={searchQuery}
                   breadcrumbs={breadcrumbs}
                   onNavigate={onFocus}
                 />

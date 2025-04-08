@@ -35,6 +35,7 @@ interface ItemProps {
   isSearchMatch?: boolean
   breadcrumbs?: ItemRow[]
   onNavigate?: (id: string | null) => void
+  searchQuery?: string
 }
 
 interface DragItem {
@@ -100,7 +101,8 @@ export function Item({
   childrenBlocked = false,
   isSearchMatch = false,
   breadcrumbs = [],
-  onNavigate
+  onNavigate,
+  searchQuery = ''
 }: ItemProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isEditing, setIsEditing] = useState(item.title === '')
@@ -312,6 +314,27 @@ export function Item({
     return 'Mission' as ItemType // Default for items with children when auto-calculated
   })()
 
+  // Add a new helper function to highlight matching text
+  const highlightMatchingText = (text: string, searchQuery: string) => {
+    if (!isSearchMatch || !searchQuery.trim()) return text;
+    
+    const normalizedQuery = searchQuery.toLowerCase().trim();
+    const normalizedText = text.toLowerCase();
+    
+    if (!normalizedText.includes(normalizedQuery)) return text;
+    
+    const startIndex = normalizedText.indexOf(normalizedQuery);
+    const endIndex = startIndex + normalizedQuery.length;
+    
+    return (
+      <>
+        {text.substring(0, startIndex)}
+        <span className="bg-yellow-200">{text.substring(startIndex, endIndex)}</span>
+        {text.substring(endIndex)}
+      </>
+    );
+  };
+
   return (
     <div className={`
       relative group
@@ -326,8 +349,7 @@ export function Item({
           transition-all duration-200 ease-in-out
           cursor-move
           'bg-white
-          ${isSearchMatch ? 'bg-yellow-100' : ''}
-          ${!isBlocked && !isSearchMatch ? 'hover:bg-gray-50' : ''}
+          ${!isBlocked ? 'hover:bg-gray-50' : ''}
         `}
       >
         {/* Display breadcrumbs if available */}
@@ -434,7 +456,7 @@ export function Item({
                       </div>
                     </button>
                     <span className="font-medium cursor-text hover:text-gray-600">
-                      {displayTitle}
+                      {highlightMatchingText(displayTitle, searchQuery.trim())}
                     </span>
                     <div className="relative group/tooltip">
                       <div
@@ -462,7 +484,7 @@ export function Item({
                   </div>
                   {displayDescription && (
                     <p className="mt-1 text-sm text-gray-600 cursor-text hover:text-gray-700 whitespace-pre-wrap break-words">
-                      {displayDescription}
+                      {highlightMatchingText(displayDescription, searchQuery.trim())}
                     </p>
                   )}
                   {!displayDescription && (
