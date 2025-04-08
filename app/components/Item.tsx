@@ -97,10 +97,10 @@ export function Item({
   childrenBlocked = false
 }: ItemProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const [isEditingTitle, setIsEditingTitle] = useState(item.title === '')
-  const [isEditingDescription, setIsEditingDescription] = useState(false)
-  const [editedTitle, setEditedTitle] = useState(item.title)
-  const [editedDescription, setEditedDescription] = useState(item.description || '')
+  const [isEditing, setIsEditing] = useState(item.title === '')
+  const [editedContent, setEditedContent] = useState(item.description 
+    ? `${item.title}\n${item.description}` 
+    : item.title)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isDependencyMenuOpen, setIsDependencyMenuOpen] = useState(false)
   const [isDependencySelectionOpen, setIsDependencySelectionOpen] = useState(false)
@@ -109,26 +109,25 @@ export function Item({
     dateDependency ? new Date(dateDependency.unblock_at) : null
   )
   
-  const titleInputRef = useRef<HTMLInputElement>(null)
-  const descriptionInputRef = useRef<HTMLTextAreaElement>(null)
+  const contentInputRef = useRef<HTMLTextAreaElement>(null)
   const dependencyMenuRef = useRef<HTMLDivElement>(null)
   const dependencyButtonRef = useRef<HTMLButtonElement>(null)
 
-  // Automatically focus title input for new/empty items
+  // Automatically focus content input for new/empty items
   useEffect(() => {
     if (item.title === '') {
-      setIsEditingTitle(true);
+      setIsEditing(true);
     }
   }, [item.id, item.title]);
 
   useEffect(() => {
-    if (isEditingTitle && titleInputRef.current) {
-      titleInputRef.current.focus()
+    if (isEditing && contentInputRef.current) {
+      contentInputRef.current.focus()
+      // Place cursor at the end of the content
+      const length = contentInputRef.current.value.length
+      contentInputRef.current.setSelectionRange(length, length)
     }
-    if (isEditingDescription && descriptionInputRef.current) {
-      descriptionInputRef.current.focus()
-    }
-  }, [isEditingTitle, isEditingDescription])
+  }, [isEditing])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -158,35 +157,49 @@ export function Item({
     }
   }, [isDependencyMenuOpen])
 
-  const handleTitleSubmit = () => {
-    const trimmedTitle = editedTitle.trim();
-    if (trimmedTitle !== '') {
-      onUpdateItem(item.id, { title: trimmedTitle })
-      setIsEditingTitle(false)
+  const handleContentSubmit = () => {
+    const contentLines = editedContent.split('\n')
+    const title = contentLines[0].trim()
+    const description = contentLines.slice(1).join('\n').trim()
+    
+    if (title !== '') {
+      onUpdateItem(item.id, { 
+        title, 
+        description: description || undefined 
+      })
+      setIsEditing(false)
     } else {
-      // If the title is empty after trimming, use a default title
+      // If the title is empty, use a default title
       const defaultTitle = 'New Item'
-      setEditedTitle(defaultTitle)
-      onUpdateItem(item.id, { title: defaultTitle })
-      setIsEditingTitle(false)
+      setEditedContent(defaultTitle + (description ? `\n${description}` : ''))
+      onUpdateItem(item.id, { 
+        title: defaultTitle, 
+        description: description || undefined 
+      })
+      setIsEditing(false)
     }
   }
 
-  const handleDescriptionSubmit = () => {
-    onUpdateItem(item.id, { description: editedDescription.trim() })
-    setIsEditingDescription(false)
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      // Enter without shift submits the edit
+      e.preventDefault()
+      handleContentSubmit()
+    } else if (e.key === 'Escape') {
+      // Escape cancels the edit
+      e.preventDefault()
+      setEditedContent(item.description 
+        ? `${item.title}\n${item.description}` 
+        : item.title)
+      setIsEditing(false)
+    }
   }
 
-  const handleKeyDown = (
-    e: React.KeyboardEvent,
-    submitFn: () => void,
-    cancelFn: () => void
-  ) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      submitFn()
-    } else if (e.key === 'Escape') {
-      cancelFn()
+  // Automatically resize textarea to fit content
+  const handleTextareaResize = () => {
+    if (contentInputRef.current) {
+      contentInputRef.current.style.height = 'auto';
+      contentInputRef.current.style.height = `${contentInputRef.current.scrollHeight}px`;
     }
   }
 
@@ -222,6 +235,10 @@ export function Item({
   } as const
 
   const isBlocked = isItemBlocked(item, blockedByTasks, availableTasks, hasChildren, childrenBlocked, dateDependency)
+
+  // Get the title and description from the current item for display
+  const displayTitle = item.title
+  const displayDescription = item.description
 
   return (
     <div className={`
@@ -277,92 +294,74 @@ export function Item({
                   </svg>
                 </button>
               )}
-              {isEditingTitle ? (
-                <input
-                  ref={titleInputRef}
-                  type="text"
-                  value={editedTitle}
-                  onChange={(e) => setEditedTitle(e.target.value)}
-                  onBlur={handleTitleSubmit}
-                  onKeyDown={(e) => handleKeyDown(
-                    e,
-                    handleTitleSubmit,
-                    () => {
-                      setEditedTitle(item.title)
-                      setIsEditingTitle(false)
-                    }
-                  )}
-                  className="flex-grow px-1 py-0.5 text-base font-medium border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+              {isEditing ? (
+                <div className="flex-grow relative">
+                  <textarea
+                    ref={contentInputRef}
+                    value={editedContent}
+                    onChange={(e) => {
+                      setEditedContent(e.target.value)
+                      handleTextareaResize()
+                    }}
+                    onBlur={handleContentSubmit}
+                    onKeyDown={handleKeyDown}
+                    className="w-full px-1 py-0.5 text-base font-medium border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none min-h-[60px]"
+                    rows={Math.max(2, editedContent.split('\n').length)}
+                    placeholder="Type title here (first line)&#10;Add details here (following lines)"
+                    onInput={handleTextareaResize}
+                  />
+                  <div className="absolute inset-x-0 top-[24px] border-t border-gray-200 opacity-50 pointer-events-none" />
+                </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <button
-                    ref={dependencyButtonRef}
-                    onClick={() => setIsDependencyMenuOpen(!isDependencyMenuOpen)}
-                    className="flex items-center justify-center hover:opacity-80 transition-opacity"
-                    title={isBlocked ? hasChildren ? 'All subitems are blocked' : 'Task is blocked - Click to manage dependencies' : 'Task is unblocked - Click to manage dependencies'}
-                  >
-                    <div 
-                      className={`
-                        w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-medium
-                        ${isBlocked ? 'bg-red-500' : 'bg-green-500'}
-                      `}
+                <div 
+                  className="flex-grow"
+                  onClick={() => setIsEditing(true)}
+                >
+                  <div className="flex items-center gap-2">
+                    <button
+                      ref={dependencyButtonRef}
+                      onClick={(e) => {
+                        e.stopPropagation() // Prevent triggering the parent's onClick
+                        setIsDependencyMenuOpen(!isDependencyMenuOpen)
+                      }}
+                      className="flex items-center justify-center hover:opacity-80 transition-opacity"
+                      title={isBlocked ? hasChildren ? 'All subitems are blocked' : 'Task is blocked - Click to manage dependencies' : 'Task is unblocked - Click to manage dependencies'}
                     >
-                      {isBlocked ? blockedByTasks.length + (dateDependency ? 1 : 0) : blockingTasks.length}
-                    </div>
-                  </button>
-                  <span 
-                    onClick={() => setIsEditingTitle(true)}
-                    className="font-medium cursor-text hover:text-gray-600"
-                  >
-                    {item.title}
-                  </span>
-                  {item.type && (
-                    <span className={`
-                      px-2 py-1 text-xs font-medium rounded-full
-                      ${typeColors[item.type as keyof typeof typeColors]}
-                      ${item.manual_type ? `ring-2 ${typeRingColors[item.type as keyof typeof typeRingColors]}` : ''}
-                    `}>
-                      {item.type}
+                      <div 
+                        className={`
+                          w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-medium
+                          ${isBlocked ? 'bg-red-500' : 'bg-green-500'}
+                        `}
+                      >
+                        {isBlocked ? blockedByTasks.length + (dateDependency ? 1 : 0) : blockingTasks.length}
+                      </div>
+                    </button>
+                    <span className="font-medium cursor-text hover:text-gray-600">
+                      {displayTitle}
                     </span>
+                    {item.type && (
+                      <span className={`
+                        px-2 py-1 text-xs font-medium rounded-full
+                        ${typeColors[item.type as keyof typeof typeColors]}
+                        ${item.manual_type ? `ring-2 ${typeRingColors[item.type as keyof typeof typeRingColors]}` : ''}
+                      `}>
+                        {item.type}
+                      </span>
+                    )}
+                  </div>
+                  {displayDescription && (
+                    <p className="mt-1 text-sm text-gray-600 cursor-text hover:text-gray-700 whitespace-pre-wrap break-words">
+                      {displayDescription}
+                    </p>
+                  )}
+                  {!displayDescription && (
+                    <p className="mt-1 text-sm text-gray-400 cursor-text hover:text-gray-500">
+                      Add description...
+                    </p>
                   )}
                 </div>
               )}
             </div>
-            {isEditingDescription ? (
-              <textarea
-                ref={descriptionInputRef}
-                value={editedDescription}
-                onChange={(e) => setEditedDescription(e.target.value)}
-                onBlur={handleDescriptionSubmit}
-                onKeyDown={(e) => handleKeyDown(
-                  e,
-                  handleDescriptionSubmit,
-                  () => {
-                    setEditedDescription(item.description || '')
-                    setIsEditingDescription(false)
-                  }
-                )}
-                className="w-full mt-1 text-sm text-gray-600 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                rows={2}
-              />
-            ) : (
-              item.description ? (
-                <p 
-                  onClick={() => setIsEditingDescription(true)}
-                  className="mt-1 text-sm text-gray-600 cursor-text hover:text-gray-700"
-                >
-                  {item.description}
-                </p>
-              ) : (
-                <p 
-                  onClick={() => setIsEditingDescription(true)}
-                  className="mt-1 text-sm text-gray-400 cursor-text hover:text-gray-500"
-                >
-                  Add description...
-                </p>
-              )
-            )}
           </div>
 
           <div className="flex items-center gap-2">

@@ -24,10 +24,10 @@
 | ✓ | Task States | As a user, I want tasks to automatically become unblocked when their blocking task is completed so that I can maintain an accurate view of task readiness without manual updates |
 | ✓ | Task States | As a user, I want to easily see which tasks are blocking a task and which tasks it blocks so that I can quickly understand task relationships in both directions |
 | ✓ | Task States | As a user, I want clear visual indicators when a task is blocked so that I can quickly identify tasks that need attention |
+| ✓ | Task States | As a user, I want to add a date as a dependency so that a task is blocked until that date, on that date it will be unblocked automatically so I can delay tasks and then have them come back automatically |
 | ✓ | Task States | As a user, if there are no unblocked subitems, then an item will also be blocked and displayed as such so that I can see there is no work available in that item |
 | | Task States | As a user, I want to assign statuses to tasks including "Stand By", "OnDeck", and "Blocked" so I can manage readiness |
 | | Task States | As a user, I want a "Blocked" task to have a review date when it will resurface for reassessment |
-| ✓ | Task States | As a user, I want to add a date as a dependency so that a task is blocked until that date, on that date it will be unblocked automatically so I can delay tasks and then have them come back automatically |
 | ✓ | Task Filtering | As a user, I want to be able to filter to show only actionable (unblocked) tasks in both tree and list views so that I can focus on what I can work on right now |
 | ✓ | Authentication | As a user, I want to be able to sign up for an account so that I can keep my tasks private and accessible |
 | ✓ | Authentication | As a user, I want to be able to log in to access my tasks so that I can work on them from anywhere |
@@ -39,8 +39,11 @@
 | ✓ | User Interface | As a user, I want smooth transitions and visual feedback so that I can understand the results of my actions |
 | ✓ | User Interface | As a user, I want to see the count of blocking and blocked tasks through prominent colored indicators (red for blocked by, green for blocking) so I can quickly understand task dependencies |
 | ✓ | User Interface | As a user, I want a more compact layout without borders around tasks and reduced whitespace between items so I can see more tasks at once while maintaining clarity |
+| ✓ | User Interface | As a user, I want line breaks in task descriptions to be preserved so I can format my notes with proper spacing and structure |
 | ✓ | Task Management | As a user, I want to be able to edit task titles and descriptions inline so that I can quickly update information |
 | ✓ | Task Management | As a user, I want to be able to delete tasks with options for handling children so that I can maintain my task hierarchy effectively |
+| ✓ | Task Management | As a user, when I add a new task, I want it to have an empty title with the edit mode automatically activated so that I can quickly type what I want |
+| ✓ | Task Management | As a user, I want a combined title/description editor where the first line becomes the title and subsequent lines become the description, so I can edit content more naturally |
 | | Task Management | As a user, I want to be able to archive completed tasks so that I can maintain a clean workspace while preserving history |
 | | Task Progress | As a user, I want to be able to track progress on tasks so that I can understand how close they are to completion |
 | | Task Progress | As a user, I want to see progress of parent tasks based on child task completion so that I can understand overall progress |
@@ -82,4 +85,4 @@
 ### Task Management
 - Delete confirmation dialogs to prevent accidental deletion
 - Child tasks can be either deleted with parent or promoted to parent's level
-- Position reordering handled automatically after deletions 
+- Position reordering handled automatically after deletions
