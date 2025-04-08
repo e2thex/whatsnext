@@ -32,6 +32,8 @@ interface ItemProps {
   dateDependency?: DateDependencyRow
   availableTasks?: ItemRow[]
   childrenBlocked?: boolean
+  breadcrumbs?: ItemRow[]
+  onBreadcrumbClick?: (id: string | null) => void
 }
 
 interface DragItem {
@@ -94,7 +96,9 @@ export function Item({
   blockedByTasks = [],
   dateDependency,
   availableTasks = [],
-  childrenBlocked = false
+  childrenBlocked = false,
+  breadcrumbs = [],
+  onBreadcrumbClick
 }: ItemProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isEditing, setIsEditing] = useState(item.title === '')
@@ -383,6 +387,30 @@ export function Item({
                   className="flex-grow"
                   onClick={() => setIsEditing(true)}
                 >
+                  {/* Breadcrumbs above title */}
+                  {breadcrumbs && breadcrumbs.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1 text-xs text-gray-500 mb-1">
+                      {breadcrumbs.map((ancestor, i) => (
+                        <span key={ancestor.id} className="flex items-center">
+                          {i > 0 && (
+                            <svg className="w-3 h-3 text-gray-400 mx-0.5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent triggering the parent's onClick
+                              onBreadcrumbClick?.(ancestor.id);
+                            }}
+                            className="hover:text-gray-900"
+                          >
+                            {ancestor.title}
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  
                   <div className="flex items-center gap-2">
                     <button
                       ref={dependencyButtonRef}
@@ -429,6 +457,7 @@ export function Item({
                       </div>
                     </div>
                   </div>
+                  
                   {displayDescription && (
                     <p className="mt-1 text-sm text-gray-600 cursor-text hover:text-gray-700 whitespace-pre-wrap break-words">
                       {displayDescription}
