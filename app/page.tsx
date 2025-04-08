@@ -715,9 +715,6 @@ export default function Home() {
           </div>
         )}
         <div className="max-w-6xl mx-auto">
-          <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900">WhatsNext</h1>
-          </div>
           <Toolbar
             viewMode={viewMode}
             onViewModeChange={setViewMode}
