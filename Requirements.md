@@ -50,7 +50,7 @@
 | | Task Progress | As a user, I want to see progress of parent tasks based on child task completion so that I can understand overall progress |
 | | Task Dates | As a user, I want to be able to set due dates for tasks so that I can manage deadlines and priorities |
 | | Task Filtering | As a user, I want to be able to filter tasks by type so that I can focus on specific levels of work |
-| | Task Search | As a user, I want to be able to search for tasks by title or description so that I can quickly find relevant items |
+| ✓ | Task Search | As a user, I want to be able to search for tasks by title or description so that I can quickly find relevant items, showing only direct ancestors and descendants of matching items |
 | ✓| Task States | As a user, I want to toggle the visibility of completed tasks within a focused view so that I can manage scope and attention |
 | | Task Types | As a user, I want each item to support both sub-tasks and questions so I can track execution and unknowns in one place |
 

@@ -215,12 +215,63 @@ export function ItemList({
     return hasChildren && areAllChildrenBlocked(item.id)
   }, [dependenciesByTask.blockedBy, items, itemsByParent, areAllChildrenBlocked, dateDependencies])
 
+  // Find all items matching the search query
+  const searchMatchingItemIds = useMemo(() => {
+    if (!searchQuery.trim()) return new Set<string>()
+    
+    const normalizedQuery = searchQuery.toLowerCase().trim()
+    const directMatchIds = new Set<string>()
+    const matchingIds = new Set<string>()
+    
+    // First, find directly matching items
+    items.forEach(item => {
+      if (
+        (item.title && item.title.toLowerCase().includes(normalizedQuery)) ||
+        (item.description && item.description.toLowerCase().includes(normalizedQuery))
+      ) {
+        directMatchIds.add(item.id)
+        matchingIds.add(item.id)
+        
+        // Add all ancestors to ensure they're visible
+        const ancestors = getItemAncestry(item.id)
+        ancestors.forEach(ancestor => matchingIds.add(ancestor.id))
+      }
+    })
+    
+    // For each directly matching item, add all its descendants
+    const processedItems = new Set<string>()
+    
+    // Function to recursively add all descendants of an item
+    const addDescendants = (itemId: string) => {
+      if (processedItems.has(itemId)) return
+      processedItems.add(itemId)
+      
+      const children = itemsByParent.get(itemId) || []
+      children.forEach(child => {
+        matchingIds.add(child.id)
+        addDescendants(child.id)
+      })
+    }
+    
+    // Process only directly matching items to add their descendants
+    Array.from(directMatchIds).forEach(itemId => {
+      addDescendants(itemId)
+    })
+    
+    return matchingIds
+  }, [items, searchQuery, itemsByParent, getItemAncestry])
+
   const renderTreeView = (parentId = focusedItemId || null) => {
     // Get items for this parent
     const baseItems = itemsByParent.get(parentId) || []
     
-    // Filter items based on actionable/blocked status and completion status
+    // Filter items based on actionable/blocked status, completion status, and search results
     const filteredItems = baseItems.filter(item => {
+      // If we have an active search, only show items in the search results
+      if (searchQuery.trim() && !searchMatchingItemIds.has(item.id)) {
+        return false
+      }
+      
       const blocked = isItemBlocked(item)
       const blockFilter = (!showOnlyActionable && !showOnlyBlocked) || // Show all
                           (showOnlyActionable && !blocked) || // Show only unblocked
@@ -278,6 +329,14 @@ export function ItemList({
             dateDependency={dateDependencies.find(dep => dep.task_id === item.id)}
             availableTasks={items}
             childrenBlocked={hasChildren && areAllChildrenBlocked(item.id)}
+            isSearchMatch={
+              !!searchQuery.trim() && 
+              searchMatchingItemIds.has(item.id) && 
+              !!(
+                (item.title && item.title.toLowerCase().includes(searchQuery.toLowerCase().trim())) ||
+                (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase().trim()))
+              )
+            }
           >
             {itemChildren}
           </Item>
@@ -313,14 +372,46 @@ export function ItemList({
       )
     }
 
-    // Find bottom-level tasks (tasks with no children)
+    // First, we always identify bottom-level tasks (tasks with no children)
     const bottomLevelTasks = items.filter(item => {
-      // An item is a bottom-level task if it has no children
       return !items.some(child => child.parent_id === item.id)
     })
 
+    // Then determine which of these tasks to display based on search and focus
+    let displayedTasks = bottomLevelTasks
+    
+    // If there's a search query, restrict to items that are in searchMatchingItemIds
+    if (searchQuery.trim()) {
+      displayedTasks = bottomLevelTasks.filter(item => searchMatchingItemIds.has(item.id))
+    } else if (focusedItemId) {
+      // If focused and no search, get bottom level tasks under the focused item
+      const getBottomLevelTasksUnderParent = (parentId: string): ItemRow[] => {
+        const result: ItemRow[] = []
+        const queue = [parentId]
+        
+        while (queue.length > 0) {
+          const current = queue.shift()!
+          const children = itemsByParent.get(current) || []
+          
+          for (const child of children) {
+            const grandchildren = itemsByParent.get(child.id) || []
+            if (grandchildren.length === 0) {
+              result.push(child)
+            } else {
+              queue.push(child.id)
+            }
+          }
+        }
+        
+        return result
+      }
+      
+      displayedTasks = getBottomLevelTasksUnderParent(focusedItemId)
+    }
+    // If neither search nor focus, we already have all bottom level tasks in displayedTasks
+
     // Apply filters for completion and blocked status
-    const filteredTasks = bottomLevelTasks.filter(item => {
+    const filteredTasks = displayedTasks.filter(item => {
       const blocked = isItemBlocked(item)
       const blockFilter = (!showOnlyActionable && !showOnlyBlocked) || // Show all
                           (showOnlyActionable && !blocked) || // Show only unblocked
@@ -427,7 +518,8 @@ export function ItemList({
                   availableTasks={items}
                   childrenBlocked={false}
                   isSearchMatch={
-                    !!searchQuery && 
+                    !!searchQuery.trim() && 
+                    searchMatchingItemIds.has(task.id) && 
                     !!(
                       (task.title && task.title.toLowerCase().includes(searchQuery.toLowerCase().trim())) ||
                       (task.description && task.description.toLowerCase().includes(searchQuery.toLowerCase().trim()))

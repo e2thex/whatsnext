@@ -21,6 +21,7 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<'tree' | 'list'>('tree')
   const [filterMode, setFilterMode] = useState<'all' | 'unblocked' | 'blocked'>('all')
   const [completionFilter, setCompletionFilter] = useState<'all' | 'completed' | 'not-completed'>('not-completed')
+  const [searchQuery, setSearchQuery] = useState<string>('')
 
   useEffect(() => {
     const fetchUserAndData = async () => {
@@ -784,12 +785,33 @@ export default function Home() {
                 </div>
               </button>
             </div>
-            <button
-              onClick={() => handleAddChild(null)}
-              className="px-3 py-1.5 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700"
-            >
-              Add Task
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search tasks..."
+                  className="px-3 py-1.5 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 w-52"
+                />
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => handleAddChild(null)}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700"
+              >
+                Add Task
+              </button>
+            </div>
           </div>
           <ItemList
             items={items}
@@ -812,6 +834,7 @@ export default function Home() {
             showOnlyActionable={filterMode === 'unblocked'}
             showOnlyBlocked={filterMode === 'blocked'}
             completionFilter={completionFilter}
+            searchQuery={searchQuery}
           />
         </div>
       </main>

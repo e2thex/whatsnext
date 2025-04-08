@@ -325,7 +325,7 @@ export function Item({
           p-2 rounded 
           transition-all duration-200 ease-in-out
           cursor-move
-          ${isBlocked ? 'bg-red-50' : 'bg-white'}
+          'bg-white
           ${isSearchMatch ? 'bg-yellow-100' : ''}
           ${!isBlocked && !isSearchMatch ? 'hover:bg-gray-50' : ''}
         `}
