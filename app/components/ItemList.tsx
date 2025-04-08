@@ -43,8 +43,8 @@ function DropZone({ parentId, position, onMoveItemToPosition }: DropZoneProps) {
     <div
       ref={setDropRef}
       className={`
-        h-2 -my-1 rounded-sm transition-all duration-200 ease-in-out
-        ${canDrop ? 'h-6 -my-3 border border-dashed' : ''}
+        h-1 -my-0.5 rounded-sm transition-all duration-200 ease-in-out
+        ${canDrop ? 'h-3 -my-1.5 border border-dashed' : ''}
         ${isOver && canDrop ? 'border-indigo-500 bg-indigo-100' : 'border-gray-300'}
       `}
     />
@@ -137,11 +137,6 @@ export function ItemList({
     return ancestry
   }
 
-  // Get all bottom-level tasks (tasks without children)
-  const getBottomLevelTasks = useMemo(() => {
-    return items.filter(item => !itemsByParent.has(item.id))
-  }, [items, itemsByParent])
-
   // Get all bottom-level tasks (tasks without children) under a specific parent
   const getBottomLevelTasksUnderParent = useCallback((parentId: string | null) => {
     const result: ItemRow[] = []
@@ -210,46 +205,47 @@ export function ItemList({
     return hasChildren && areAllChildrenBlocked(item.id)
   }, [dependenciesByTask.blockedBy, items, itemsByParent, areAllChildrenBlocked, dateDependencies])
 
-  const renderTreeView = (parentId: string | null): ReactNode[] => {
-    const children = itemsByParent.get(parentId) || []
-    const result: ReactNode[] = []
+  const renderTreeView = (parentId = focusedItemId || null) => {
+    // Get items for this parent
+    const baseItems = itemsByParent.get(parentId) || []
+    
+    // Filter items based on actionable/blocked status
+    const filteredItems = baseItems.filter(item => {
+      const blocked = isItemBlocked(item)
+      return (!showOnlyActionable && !showOnlyBlocked) || // Show all
+             (showOnlyActionable && !blocked) || // Show only unblocked
+             (showOnlyBlocked && blocked) // Show only blocked
+    })
+    
+    // Custom sort function that puts items in position order
+    const sortedItems = [...filteredItems].sort((a, b) => a.position - b.position)
+    
+    const content: ReactNode[] = []
 
-    // Add initial drop zone for this level
-    if (!focusedItemId || focusedItemId === parentId) {
-      result.push(
-        <DropZone
-          key={`dropzone-${parentId}-0`}
-          parentId={parentId}
-          position={0}
-          onMoveItemToPosition={onMoveItemToPosition}
-        />
-      )
-    }
+    sortedItems.forEach((item, index) => {
+      const childItems = itemsByParent.get(item.id) || []
+      const hasChildren = childItems.length > 0
 
-    children.forEach((item, index) => {
-      const itemChildren = itemsByParent.get(item.id) || []
-      const hasChildren = itemChildren.length > 0
-      const isBlocked = isItemBlocked(item)
-      const shouldShowItem = (!focusedItemId || 
-        // Show if this is the focused item
-        focusedItemId === item.id || 
-        // Show if this item is a descendant of the focused item
-        getItemAncestry(item.id).some(ancestor => ancestor.id === focusedItemId)) &&
-        // Apply filters
-        ((!showOnlyActionable && !showOnlyBlocked) || // Show all
-         (showOnlyActionable && !isBlocked) || // Show only unblocked
-         (showOnlyBlocked && isBlocked)) // Show only blocked
+      // Recursively render children
+      const itemChildren = hasChildren ? (
+        <div className="space-y-0.5">
+          {renderTreeView(item.id)}
+        </div>
+      ) : null
 
-      if (shouldShowItem) {
-        result.push(
+      content.push(
+        <div key={item.id} className="py-0.5">
+          <DropZone
+            parentId={item.parent_id}
+            position={item.position}
+            onMoveItemToPosition={onMoveItemToPosition}
+          />
           <Item
-            key={item.id}
             item={item}
             onAddChild={onAddChild}
             onToggleComplete={onToggleComplete}
             onTypeChange={onTypeChange}
             onMoveItem={onMoveItem}
-            onMoveItemToPosition={onMoveItemToPosition}
             onUpdateItem={onUpdateItem}
             onDeleteItem={onDeleteItem}
             onFocus={onFocus}
@@ -257,41 +253,37 @@ export function ItemList({
             onRemoveDependency={onRemoveDependency}
             onAddDateDependency={onAddDateDependency}
             onRemoveDateDependency={onRemoveDateDependency}
-            siblingCount={children.length}
+            siblingCount={childItems.length}
             itemPosition={index}
             hasChildren={hasChildren}
-            childCount={itemChildren.length}
+            childCount={childItems.length}
             blockingTasks={dependenciesByTask.blocking.get(item.id) || []}
             blockedByTasks={dependenciesByTask.blockedBy.get(item.id) || []}
             dateDependency={dateDependencies.find(dep => dep.task_id === item.id)}
             availableTasks={items}
             childrenBlocked={hasChildren && areAllChildrenBlocked(item.id)}
           >
-            {renderTreeView(item.id)}
+            {itemChildren}
           </Item>
-        )
-
-        result.push(
-          <DropZone
-            key={`dropzone-${parentId}-${index + 1}`}
-            parentId={parentId}
-            position={index + 1}
-            onMoveItemToPosition={onMoveItemToPosition}
-          />
-        )
-      } else if (hasChildren) {
-        result.push(...renderTreeView(item.id))
-      }
+          {index === sortedItems.length - 1 && (
+            <DropZone
+              parentId={item.parent_id}
+              position={item.position + 1}
+              onMoveItemToPosition={onMoveItemToPosition}
+            />
+          )}
+        </div>
+      )
     })
 
-    return result
+    return content
   }
 
   const renderListView = () => {
     const tasksToShow = focusedItemId 
       ? getBottomLevelTasksUnderParent(focusedItemId)
-      : getBottomLevelTasks
-
+      : items.filter(item => !itemsByParent.has(item.id)) // Get tasks without children
+    
     // Apply filters
     const filteredTasks = tasksToShow.filter(task => {
       const isBlocked = isItemBlocked(task)
@@ -299,9 +291,9 @@ export function ItemList({
              (showOnlyActionable && !isBlocked) || // Show only unblocked
              (showOnlyBlocked && isBlocked) // Show only blocked
     })
-    
+
     return (
-      <div className="space-y-4">
+      <div className="space-y-0.5">
         {filteredTasks.map(task => {
           // Show breadcrumbs if we're at root level or if we're focused and this task is deeper than the focused item
           const breadcrumbs = !focusedItemId
@@ -313,11 +305,11 @@ export function ItemList({
           const hasChildren = itemsByParent.has(task.id)
 
           return (
-            <div key={task.id} className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div key={task.id} className="bg-white rounded">
               {breadcrumbs.length > 0 && (
-                <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 rounded-t-lg">
+                <div className="p-2 bg-gray-50 rounded-t">
                   <div className="flex items-center gap-2 text-sm text-gray-600">
-                    {breadcrumbs.map((ancestor, index) => (
+                    {breadcrumbs.map((ancestor, i) => (
                       <Fragment key={ancestor.id}>
                         <button
                           onClick={() => onFocus(ancestor.id)}
@@ -325,7 +317,7 @@ export function ItemList({
                         >
                           {ancestor.title}
                         </button>
-                        {index < breadcrumbs.length - 1 && (
+                        {i < breadcrumbs.length - 1 && (
                           <svg className="w-4 h-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
                           </svg>
@@ -341,7 +333,6 @@ export function ItemList({
                 onToggleComplete={onToggleComplete}
                 onTypeChange={onTypeChange}
                 onMoveItem={onMoveItem}
-                onMoveItemToPosition={onMoveItemToPosition}
                 onUpdateItem={onUpdateItem}
                 onDeleteItem={onDeleteItem}
                 onFocus={onFocus}
@@ -367,14 +358,18 @@ export function ItemList({
   }
 
   return (
-    <div className="relative space-y-4">
+    <div className="relative space-y-2">
       {focusedItemId && (
         <Breadcrumb
           items={getItemAncestry(focusedItemId)}
           onNavigate={onFocus}
         />
       )}
-      {viewMode === 'tree' ? renderTreeView(null) : renderListView()}
+      {viewMode === 'tree' ? (
+        <div className="space-y-0.5">
+          {renderTreeView()}
+        </div>
+      ) : renderListView()}
     </div>
   )
 } 

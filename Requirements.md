@@ -38,6 +38,7 @@
 | ✓ | User Interface | As a user, I want a clean, modern interface with proper spacing so that I can focus on my tasks without distraction |
 | ✓ | User Interface | As a user, I want smooth transitions and visual feedback so that I can understand the results of my actions |
 | ✓ | User Interface | As a user, I want to see the count of blocking and blocked tasks through prominent colored indicators (red for blocked by, green for blocking) so I can quickly understand task dependencies |
+| ✓ | User Interface | As a user, I want a more compact layout without borders around tasks and reduced whitespace between items so I can see more tasks at once while maintaining clarity |
 | ✓ | Task Management | As a user, I want to be able to edit task titles and descriptions inline so that I can quickly update information |
 | ✓ | Task Management | As a user, I want to be able to delete tasks with options for handling children so that I can maintain my task hierarchy effectively |
 | | Task Management | As a user, I want to be able to archive completed tasks so that I can maintain a clean workspace while preserving history |

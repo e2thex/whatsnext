@@ -15,7 +15,6 @@ interface ItemProps {
   onToggleComplete: (id: string) => void
   onTypeChange: (id: string, type: ItemType | null) => void
   onMoveItem: (id: string, direction: 'up' | 'down') => void
-  onMoveItemToPosition: (itemId: string, newPosition: number, parentId: string | null) => void
   onUpdateItem: (id: string, updates: { title?: string; description?: string }) => void
   onDeleteItem: (id: string, deleteChildren: boolean) => void
   onFocus: (id: string | null) => void
@@ -79,7 +78,6 @@ export function Item({
   onToggleComplete, 
   onTypeChange, 
   onMoveItem,
-  onMoveItemToPosition,
   onUpdateItem,
   onDeleteItem,
   onFocus,
@@ -221,10 +219,10 @@ export function Item({
           opacity: isDragging ? 0.4 : 1,
         }}
         className={`
-          p-4 rounded-lg bg-white shadow-sm border
+          p-2 rounded bg-white 
           transition-all duration-200 ease-in-out
           cursor-move
-          ${isBlocked ? 'border-red-200 bg-red-50' : 'border-gray-200'}
+          ${isBlocked ? 'bg-red-50' : 'hover:bg-gray-50'}
         `}
       >
         <div className="flex items-center gap-4">
@@ -421,7 +419,7 @@ export function Item({
         {children && (
           <div 
             className={`
-              mt-4 ml-8 space-y-4 overflow-hidden transition-all duration-200 ease-in-out
+              mt-2 ml-6 space-y-2 overflow-hidden transition-all duration-200 ease-in-out
               ${isCollapsed ? 'h-0 mt-0 opacity-0' : 'opacity-100'}
             `}
           >
