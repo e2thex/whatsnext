@@ -151,8 +151,8 @@ export function ItemList({
     return { blocking, blockedBy }
   }, [dependencies])
 
-  // Get the ancestry chain for any item
-  const getItemAncestry = (itemId: string): ItemRow[] => {
+  // Get the ancestry chain for any item - Wrapped in useCallback
+  const getItemAncestry = useCallback((itemId: string): ItemRow[] => {
     const ancestry: ItemRow[] = []
     let currentItem = items.find(item => item.id === itemId)
     
@@ -162,7 +162,7 @@ export function ItemList({
     }
     
     return ancestry
-  }
+  }, [items])
 
   // Get the path from ancestor to descendant (inclusive)
   const getPathBetweenItems = (ancestorId: string, descendantId: string): ItemRow[] => {

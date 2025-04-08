@@ -1,9 +1,6 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { type Database } from '@/src/lib/supabase/client'
-
-type Task = Database['public']['Tables']['tasks']['Insert']
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),

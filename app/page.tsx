@@ -20,7 +20,6 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'tree' | 'list'>('tree')
-  const [filterMode, setFilterMode] = useState<'all' | 'unblocked' | 'blocked'>('all')
   const [completionFilter, setCompletionFilter] = useState<'all' | 'completed' | 'not-completed'>('not-completed')
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [showOnlyActionable, setShowOnlyActionable] = useState(false)

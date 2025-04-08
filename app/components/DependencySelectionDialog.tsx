@@ -1,4 +1,4 @@
-import { Fragment, useState, useMemo } from 'react'
+import { Fragment, useState, useMemo, useCallback } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { type Database } from '@/src/lib/supabase/client'
 
@@ -21,7 +21,7 @@ export function DependencySelectionDialog({
 }: DependencySelectionDialogProps) {
   const [searchQuery, setSearchQuery] = useState('')
 
-  const getTaskPath = (taskId: string): string => {
+  const getTaskPath = useCallback((taskId: string): string => {
     const path: string[] = []
     let currentTask = availableTasks.find(t => t.id === taskId)
     
@@ -38,7 +38,7 @@ export function DependencySelectionDialog({
     }
     
     return path.join(' > ')
-  }
+  }, [availableTasks])
 
   const filteredTasks = useMemo(() => {
     return availableTasks
@@ -48,7 +48,7 @@ export function DependencySelectionDialog({
         task.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         getTaskPath(task.id).toLowerCase().includes(searchQuery.toLowerCase())
       )
-  }, [availableTasks, currentTaskId, searchQuery])
+  }, [availableTasks, currentTaskId, searchQuery, getTaskPath])
 
   return (
     <Transition appear show={isOpen} as={Fragment}>

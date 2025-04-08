@@ -1,44 +1,41 @@
-import { format } from 'date-fns'
 import { type Database } from '../../src/lib/supabase/client'
 import clsx from 'clsx'
 
-type Task = Database['public']['Tables']['tasks']['Row']
+// Use the correct type from your database schema
+type Item = Database['public']['Tables']['items']['Row']
 
 interface TaskProps {
-  task: Task
-  onStatusChange: (id: string, status: Task['status']) => void
+  item: Item
+  onToggleComplete: (id: string) => void
 }
 
+// Simple status-based colors
 const statusColors = {
-  todo: 'bg-yellow-100 text-yellow-800',
-  in_progress: 'bg-blue-100 text-blue-800',
-  done: 'bg-green-100 text-green-800',
+  completed: 'bg-green-100 text-green-800',
+  incomplete: 'bg-yellow-100 text-yellow-800',
 }
 
-export const Task = ({ task, onStatusChange }: TaskProps) => {
+export const Task = ({ item, onToggleComplete }: TaskProps) => {
   return (
     <div className="rounded-lg border p-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">{task.title}</h3>
-        <select
-          value={task.status}
-          onChange={(e) => onStatusChange(task.id, e.target.value as Task['status'])}
+        <h3 className="text-lg font-semibold">{item.title}</h3>
+        <button
+          onClick={() => onToggleComplete(item.id)}
           className={clsx(
             'rounded px-2 py-1 text-sm font-medium',
-            statusColors[task.status]
+            item.completed ? statusColors.completed : statusColors.incomplete
           )}
         >
-          <option value="todo">Todo</option>
-          <option value="in_progress">In Progress</option>
-          <option value="done">Done</option>
-        </select>
+          {item.completed ? 'Completed' : 'Incomplete'}
+        </button>
       </div>
-      {task.description && (
-        <p className="mt-2 text-gray-600">{task.description}</p>
+      {item.description && (
+        <p className="mt-2 text-gray-600">{item.description}</p>
       )}
-      {task.due_date && (
+      {item.completed_at && (
         <p className="mt-2 text-sm text-gray-500">
-          Due: {format(new Date(task.due_date), 'PPP')}
+          Completed: {new Date(item.completed_at).toLocaleDateString()}
         </p>
       )}
     </div>

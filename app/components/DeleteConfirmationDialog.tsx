@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+// No imports needed here
 
 interface DeleteConfirmationDialogProps {
   isOpen: boolean
