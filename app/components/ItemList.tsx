@@ -390,6 +390,15 @@ export function ItemList({
         const result: ItemRow[] = []
         const queue = [parentId]
         
+        // First check if the focused item itself is a bottom-level task
+        const focusedItem = items.find(item => item.id === parentId)
+        const focusedItemHasChildren = items.some(item => item.parent_id === parentId)
+        
+        if (focusedItem && !focusedItemHasChildren) {
+          // If the focused item has no children, include it in the results
+          result.push(focusedItem)
+        }
+        
         while (queue.length > 0) {
           const current = queue.shift()!
           const children = itemsByParent.get(current) || []
@@ -546,7 +555,7 @@ export function ItemList({
 
   return (
     <div className="relative space-y-2">
-      {focusedItemId && !searchQuery.trim() && viewMode === 'tree' && (
+      {focusedItemId && !searchQuery.trim() && (
         <Breadcrumb
           items={getItemAncestry(focusedItemId)}
           onNavigate={onFocus}
@@ -554,7 +563,60 @@ export function ItemList({
       )}
       {viewMode === 'tree' ? (
         <div className="space-y-0.5">
-          {renderTreeView()}
+          {focusedItemId && !searchQuery.trim() ? (
+            // When focused and not searching, render the focused item first, then its children
+            <>
+              {(() => {
+                const focusedItem = items.find(item => item.id === focusedItemId);
+                if (!focusedItem) return null;
+
+                const childItems = itemsByParent.get(focusedItem.id) || [];
+                const hasChildren = childItems.length > 0;
+
+                // Recursively render children
+                const itemChildren = hasChildren ? (
+                  <div className="space-y-0.5 ml-6 mt-2">
+                    {renderTreeView(focusedItem.id)}
+                  </div>
+                ) : null;
+
+                return (
+                  <div key={focusedItem.id} className="py-0.5">
+                    <Item
+                      item={focusedItem}
+                      onAddChild={onAddChild}
+                      onToggleComplete={onToggleComplete}
+                      onTypeChange={onTypeChange}
+                      onMoveItem={onMoveItem}
+                      onUpdateItem={onUpdateItem}
+                      onDeleteItem={onDeleteItem}
+                      onFocus={onFocus}
+                      onAddDependency={onAddDependency}
+                      onRemoveDependency={onRemoveDependency}
+                      onAddDateDependency={onAddDateDependency}
+                      onRemoveDateDependency={onRemoveDateDependency}
+                      siblingCount={childItems.length}
+                      itemPosition={0}
+                      hasChildren={hasChildren}
+                      childCount={childItems.length}
+                      blockingTasks={dependenciesByTask.blocking.get(focusedItem.id) || []}
+                      blockedByTasks={dependenciesByTask.blockedBy.get(focusedItem.id) || []}
+                      dateDependency={dateDependencies.find(dep => dep.task_id === focusedItem.id)}
+                      availableTasks={items}
+                      childrenBlocked={hasChildren && areAllChildrenBlocked(focusedItem.id)}
+                      isSearchMatch={false}
+                      searchQuery={searchQuery}
+                    >
+                      {itemChildren}
+                    </Item>
+                  </div>
+                );
+              })()}
+            </>
+          ) : (
+            // Normal tree view (not focused or searching)
+            renderTreeView()
+          )}
         </div>
       ) : renderListView()}
     </div>
