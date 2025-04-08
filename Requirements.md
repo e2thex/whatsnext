@@ -26,8 +26,6 @@
 | ✓ | Task States | As a user, I want clear visual indicators when a task is blocked so that I can quickly identify tasks that need attention |
 | ✓ | Task States | As a user, I want to add a date as a dependency so that a task is blocked until that date, on that date it will be unblocked automatically so I can delay tasks and then have them come back automatically |
 | ✓ | Task States | As a user, if there are no unblocked subitems, then an item will also be blocked and displayed as such so that I can see there is no work available in that item |
-| | Task States | As a user, I want to assign statuses to tasks including "Stand By", "OnDeck", and "Blocked" so I can manage readiness |
-| | Task States | As a user, I want a "Blocked" task to have a review date when it will resurface for reassessment |
 | ✓ | Task Filtering | As a user, I want to be able to filter to show only actionable (unblocked) tasks in both tree and list views so that I can focus on what I can work on right now |
 | ✓ | Task Filtering | As a user, I want to be able to toggle between viewing all tasks, only completed tasks, or only uncompleted tasks, with uncompleted tasks being the default view, so I can focus on tasks that need my attention |
 | ✓ | Authentication | As a user, I want to be able to sign up for an account so that I can keep my tasks private and accessible |
@@ -53,7 +51,7 @@
 | | Task Dates | As a user, I want to be able to set due dates for tasks so that I can manage deadlines and priorities |
 | | Task Filtering | As a user, I want to be able to filter tasks by type so that I can focus on specific levels of work |
 | | Task Search | As a user, I want to be able to search for tasks by title or description so that I can quickly find relevant items |
-| | Task States | As a user, I want to toggle the visibility of completed tasks within a focused view so that I can manage scope and attention |
+| ✓| Task States | As a user, I want to toggle the visibility of completed tasks within a focused view so that I can manage scope and attention |
 | | Task Types | As a user, I want each item to support both sub-tasks and questions so I can track execution and unknowns in one place |
 
 ## Implementation Notes

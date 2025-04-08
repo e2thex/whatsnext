@@ -95,6 +95,7 @@ export interface ItemListProps {
   showOnlyActionable: boolean
   showOnlyBlocked: boolean
   completionFilter: 'all' | 'completed' | 'not-completed'
+  searchQuery: string
 }
 
 export function ItemList({ 
@@ -117,7 +118,8 @@ export function ItemList({
   viewMode,
   showOnlyActionable,
   showOnlyBlocked,
-  completionFilter
+  completionFilter,
+  searchQuery
 }: ItemListProps) {
   const itemsByParent = useMemo(() => {
     const map = new Map<string | null, ItemRow[]>()
@@ -160,6 +162,15 @@ export function ItemList({
     }
     
     return ancestry
+  }
+
+  // Get the path from ancestor to descendant (inclusive)
+  const getPathBetweenItems = (ancestorId: string, descendantId: string): ItemRow[] => {
+    const ancestry = getItemAncestry(descendantId)
+    const ancestorIndex = ancestry.findIndex(item => item.id === ancestorId)
+    
+    if (ancestorIndex === -1) return []
+    return ancestry.slice(ancestorIndex)
   }
 
   // Check if all children of an item are blocked
@@ -302,42 +313,14 @@ export function ItemList({
       )
     }
 
-    // Find tasks to show based on the focused item
-    let tasksList = []
-    
-    // Helper function to get all bottom-level tasks under a parent
-    const getBottomLevelTasksUnderParent = (parentId: string): ItemRow[] => {
-      const result: ItemRow[] = []
-      
-      // Recursively find all bottom-level tasks
-      const findBottomTasks = (currentParentId: string) => {
-        const children = itemsByParent.get(currentParentId) || []
-        
-        for (const child of children) {
-          if (!itemsByParent.has(child.id)) {
-            // This is a bottom-level task with no children
-            result.push(child)
-          } else {
-            // This has children, so recurse
-            findBottomTasks(child.id)
-          }
-        }
-      }
-      
-      findBottomTasks(parentId)
-      return result
-    }
-    
-    // If we have a focused item, show all bottom-level tasks under it
-    if (focusedItemId) {
-      tasksList = getBottomLevelTasksUnderParent(focusedItemId)
-    } else {
-      // If we're at the root level, show all bottom-level tasks (items without children)
-      tasksList = items.filter(item => !itemsByParent.has(item.id))
-    }
+    // Find bottom-level tasks (tasks with no children)
+    const bottomLevelTasks = items.filter(item => {
+      // An item is a bottom-level task if it has no children
+      return !items.some(child => child.parent_id === item.id)
+    })
 
     // Apply filters for completion and blocked status
-    tasksList = tasksList.filter(item => {
+    const filteredTasks = bottomLevelTasks.filter(item => {
       const blocked = isItemBlocked(item)
       const blockFilter = (!showOnlyActionable && !showOnlyBlocked) || // Show all
                           (showOnlyActionable && !blocked) || // Show only unblocked
@@ -350,40 +333,45 @@ export function ItemList({
       return blockFilter && completionFilterResult;
     });
 
-    // Sort hierarchically by the position of ancestors and then the item itself
-    const sortedTasks = [...tasksList].sort((a, b) => {
-      // Get full ancestry for both items
-      const ancestryA = getItemAncestry(a.id);
-      const ancestryB = getItemAncestry(b.id);
+    // Sort tasks by ancestry and position
+    filteredTasks.sort((a, b) => {
+      const aAncestry = getItemAncestry(a.id);
+      const bAncestry = getItemAncestry(b.id);
       
-      // Compare positions starting from the root
-      for (let i = 0; i < Math.min(ancestryA.length, ancestryB.length); i++) {
-        const posA = ancestryA[i].position;
-        const posB = ancestryB[i].position;
-        
-        if (posA !== posB) {
-          return posA - posB; // Sort by position at this level
+      // Compare each level of ancestry
+      const minLength = Math.min(aAncestry.length, bAncestry.length);
+      
+      for (let i = 0; i < minLength - 1; i++) {
+        // If ancestors differ at this level, sort by position
+        if (aAncestry[i].id !== bAncestry[i].id) {
+          return aAncestry[i].position - bAncestry[i].position;
         }
       }
       
-      // If we get here, all common ancestors have the same position
-      // Sort by ancestry depth (shorter ancestry comes first)
-      return ancestryA.length - ancestryB.length;
+      // If one path is shorter, it comes first
+      if (aAncestry.length !== bAncestry.length) {
+        return aAncestry.length - bAncestry.length;
+      }
+      
+      // If paths are same length and have same ancestors, sort by position
+      return a.position - b.position;
     });
 
     // If no tasks match our criteria, show empty state
-    if (sortedTasks.length === 0) {
+    if (filteredTasks.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-          <p className="mb-4 text-lg">No tasks here yet</p>
-          <button
-            onClick={() => onAddChild(focusedItemId)}
-            className="flex items-center justify-center w-10 h-10 text-white bg-blue-500 rounded-full hover:bg-blue-600"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-          </button>
+          <p className="mb-4 text-lg">{searchQuery.trim() ? 'No matching tasks found' : 'No tasks here yet'}</p>
+          {!searchQuery.trim() && (
+            <button
+              onClick={() => onAddChild(focusedItemId)}
+              className="flex items-center justify-center w-10 h-10 text-white bg-blue-500 rounded-full hover:bg-blue-600"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </button>
+          )}
         </div>
       )
     }
@@ -391,7 +379,7 @@ export function ItemList({
     return (
       <div className="space-y-0.5">
         {/* Add a drop zone at the beginning for empty lists or at position 0 */}
-        {sortedTasks.length === 0 ? (
+        {filteredTasks.length === 0 ? (
           <DropZone
             parentId={focusedItemId || null}
             position={0}
@@ -399,31 +387,19 @@ export function ItemList({
           />
         ) : (
           <DropZone
-            parentId={sortedTasks[0].parent_id}
+            parentId={filteredTasks[0].parent_id}
             position={0}
             onMoveItemToPosition={onMoveItemToPosition}
           />
         )}
         
-        {sortedTasks.map((task, index) => {
-          // Calculate breadcrumbs differently depending on whether we're focused or at root
-          let breadcrumbs: ItemRow[] = []
-          
-          if (!focusedItemId) {
-            // At root level, show full ancestry except the task itself
-            breadcrumbs = getItemAncestry(task.id).slice(0, -1)
-          } else if (task.id !== focusedItemId) {
-            // When focused, show the path from the focused item to the task
-            const ancestry = getItemAncestry(task.id)
-            const focusedIndex = ancestry.findIndex(item => item.id === focusedItemId)
-            
-            if (focusedIndex !== -1) {
-              // Get path from after focused item to before current task
-              breadcrumbs = ancestry.slice(focusedIndex + 1, -1)
-            }
-          }
-          
-          const hasChildren = itemsByParent.has(task.id)
+        {filteredTasks.map((task) => {
+          // Show breadcrumbs if we're at root level or if we're focused and this task is deeper than the focused item
+          const breadcrumbs = !focusedItemId || searchQuery.trim()
+            ? getItemAncestry(task.id).slice(0, -1) // Show full ancestry except the task itself when at root or searching
+            : task.id !== focusedItemId
+              ? getPathBetweenItems(focusedItemId, task.id).slice(1, -1) // Show path between focused item and task
+              : []
 
           return (
             <div key={task.id} className="py-0.5">
@@ -441,17 +417,24 @@ export function ItemList({
                   onRemoveDependency={onRemoveDependency}
                   onAddDateDependency={onAddDateDependency}
                   onRemoveDateDependency={onRemoveDateDependency}
-                  siblingCount={sortedTasks.length}
-                  itemPosition={index}
-                  hasChildren={hasChildren}
-                  childCount={itemsByParent.get(task.id)?.length || 0}
+                  siblingCount={1}
+                  itemPosition={0}
+                  hasChildren={false}
+                  childCount={0}
                   blockingTasks={dependenciesByTask.blocking.get(task.id) || []}
                   blockedByTasks={dependenciesByTask.blockedBy.get(task.id) || []}
                   dateDependency={dateDependencies.find(dep => dep.task_id === task.id)}
                   availableTasks={items}
-                  childrenBlocked={hasChildren && areAllChildrenBlocked(task.id)}
-                  breadcrumbs={breadcrumbs.length > 0 ? breadcrumbs : undefined}
-                  onBreadcrumbClick={onFocus}
+                  childrenBlocked={false}
+                  isSearchMatch={
+                    !!searchQuery && 
+                    !!(
+                      (task.title && task.title.toLowerCase().includes(searchQuery.toLowerCase().trim())) ||
+                      (task.description && task.description.toLowerCase().includes(searchQuery.toLowerCase().trim()))
+                    )
+                  }
+                  breadcrumbs={breadcrumbs}
+                  onNavigate={onFocus}
                 />
               </div>
               {/* Add a drop zone after each item */}
@@ -469,7 +452,7 @@ export function ItemList({
 
   return (
     <div className="relative space-y-2">
-      {focusedItemId && (
+      {focusedItemId && !searchQuery.trim() && viewMode === 'tree' && (
         <Breadcrumb
           items={getItemAncestry(focusedItemId)}
           onNavigate={onFocus}
