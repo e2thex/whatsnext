@@ -1,8 +1,9 @@
-import { useMemo, useCallback, type ReactNode, Fragment } from 'react'
+import { useMemo, useCallback, type ReactNode, Fragment, useEffect, useState } from 'react'
 import { Item } from './Item'
 import { useDrop } from 'react-dnd'
 import { type Database, type ItemType } from '../../src/lib/supabase/client'
 import { Breadcrumb } from './Breadcrumb'
+import { useDragDropManager } from 'react-dnd'
 
 type ItemRow = Database['public']['Tables']['items']['Row']
 type TaskDependencyRow = Database['public']['Tables']['task_dependencies']['Row']
@@ -21,8 +22,28 @@ interface DropZoneProps {
   onMoveItemToPosition: (itemId: string, newPosition: number, parentId: string | null) => void
 }
 
+// Custom hook to detect if any drag operation is in progress
+function useAnyDragging() {
+  const [isDragging, setIsDragging] = useState(false)
+  const manager = useDragDropManager()
+  
+  useEffect(() => {
+    const monitor = manager.getMonitor()
+    const unsubscribe = monitor.subscribeToStateChange(() => {
+      setIsDragging(monitor.isDragging())
+    })
+    
+    return () => {
+      unsubscribe()
+    }
+  }, [manager])
+  
+  return isDragging
+}
+
 function DropZone({ parentId, position, onMoveItemToPosition }: DropZoneProps) {
-  const [{ isOver, canDrop }, drop] = useDrop<DragItem, void, { isOver: boolean; canDrop: boolean }>({
+  const anyDragging = useAnyDragging()
+  const [{ isOver }, drop] = useDrop<DragItem, void, { isOver: boolean }>({
     accept: 'ITEM',
     drop: (item) => {
       onMoveItemToPosition(item.id, position, parentId)
@@ -30,8 +51,7 @@ function DropZone({ parentId, position, onMoveItemToPosition }: DropZoneProps) {
     },
     canDrop: () => true,
     collect: monitor => ({
-      isOver: monitor.isOver(),
-      canDrop: monitor.canDrop()
+      isOver: monitor.isOver()
     })
   })
 
@@ -43,9 +63,12 @@ function DropZone({ parentId, position, onMoveItemToPosition }: DropZoneProps) {
     <div
       ref={setDropRef}
       className={`
-        h-1 -my-0.5 rounded-sm transition-all duration-200 ease-in-out
-        ${canDrop ? 'h-3 -my-1.5 border border-dashed' : ''}
-        ${isOver && canDrop ? 'border-indigo-500 bg-indigo-100' : 'border-gray-300'}
+        transition-all duration-200 ease-in-out
+        ${isOver 
+          ? 'h-4 my-2 border-2 border-dashed border-indigo-500 bg-indigo-100' 
+          : anyDragging 
+            ? 'h-2 my-1 border-2 border-dashed border-gray-300 rounded-sm' 
+            : 'h-0 border-0 my-0'}
       `}
     />
   )
@@ -139,24 +162,14 @@ export function ItemList({
     return ancestry
   }
 
-  // Get all bottom-level tasks (tasks without children) under a specific parent
-  const getBottomLevelTasksUnderParent = useCallback((parentId: string | null) => {
-    const result: ItemRow[] = []
-    const queue = [...(itemsByParent.get(parentId) || [])]
+  // Get the path from ancestor to descendant (inclusive)
+  const getPathBetweenItems = (ancestorId: string, descendantId: string): ItemRow[] => {
+    const ancestry = getItemAncestry(descendantId)
+    const ancestorIndex = ancestry.findIndex(item => item.id === ancestorId)
     
-    while (queue.length > 0) {
-      const current = queue.shift()!
-      const children = itemsByParent.get(current.id) || []
-      
-      if (children.length === 0) {
-        result.push(current)
-      } else {
-        queue.push(...children)
-      }
-    }
-    
-    return result
-  }, [itemsByParent])
+    if (ancestorIndex === -1) return []
+    return ancestry.slice(ancestorIndex)
+  }
 
   // Check if all children of an item are blocked
   const areAllChildrenBlocked = useCallback((itemId: string): boolean => {
@@ -176,13 +189,6 @@ export function ItemList({
       return isDirectlyBlocked || (hasChildren && areAllChildrenBlocked(child.id))
     })
   }, [itemsByParent, dependenciesByTask.blockedBy, items])
-
-  // Get the path from ancestor to descendant (inclusive)
-  const getPathBetweenItems = (ancestorId: string, descendantId: string): ItemRow[] => {
-    const ancestry = getItemAncestry(descendantId)
-    const startIndex = ancestry.findIndex(item => item.id === ancestorId)
-    return startIndex >= 0 ? ancestry.slice(startIndex) : []
-  }
 
   // Check if an item is blocked (either directly, through children, or by date)
   const isItemBlocked = useCallback((item: ItemRow): boolean => {
@@ -288,59 +294,87 @@ export function ItemList({
   }
 
   const renderListView = () => {
-    const tasksToShow = focusedItemId 
-      ? getBottomLevelTasksUnderParent(focusedItemId)
-      : items.filter(item => !itemsByParent.has(item.id)) // Get tasks without children
+    // If there are no items at all, show empty state
+    if (items.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+          <p className="mb-4 text-lg">No tasks yet</p>
+          <button
+            onClick={() => onAddChild(null)}
+            className="flex items-center justify-center w-10 h-10 text-white bg-blue-500 rounded-full hover:bg-blue-600"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </button>
+        </div>
+      )
+    }
+
+    // Find tasks to show based on the focused item
+    let sortedTasks = []
     
-    // Apply filters
-    const filteredTasks = tasksToShow.filter(task => {
-      const isBlocked = isItemBlocked(task)
+    // If we have a focused item, show its immediate children
+    if (focusedItemId) {
+      sortedTasks = [...(itemsByParent.get(focusedItemId) || [])]
+    } else {
+      // If we're at the root level, show all bottom-level tasks (items without children)
+      // Bottom level tasks are those that don't have any children
+      sortedTasks = items.filter(item => !itemsByParent.has(item.id))
+    }
+
+    // Apply filters for completion and blocked status
+    sortedTasks = sortedTasks.filter(item => {
+      const blocked = isItemBlocked(item)
       const blockFilter = (!showOnlyActionable && !showOnlyBlocked) || // Show all
-                          (showOnlyActionable && !isBlocked) || // Show only unblocked
-                          (showOnlyBlocked && isBlocked); // Show only blocked
+                          (showOnlyActionable && !blocked) || // Show only unblocked
+                          (showOnlyBlocked && blocked); // Show only blocked
       
       const completionFilterResult = completionFilter === 'all' || 
-                                    (completionFilter === 'completed' && task.completed) ||
-                                    (completionFilter === 'not-completed' && !task.completed);
+                                    (completionFilter === 'completed' && item.completed) ||
+                                    (completionFilter === 'not-completed' && !item.completed);
       
       return blockFilter && completionFilterResult;
-    })
+    });
 
-    // Calculate ancestral paths for sorting
-    const taskAncestries = new Map<string, number[]>();
-    
-    filteredTasks.forEach(task => {
-      const ancestry = getItemAncestry(task.id);
-      // Create a position path array where each element is the position of that ancestor
-      const positionPath = ancestry.map(item => item.position);
-      taskAncestries.set(task.id, positionPath);
-    });
-    
-    // Compare two position paths lexicographically
-    const comparePaths = (a: number[], b: number[]): number => {
-      const minLength = Math.min(a.length, b.length);
-      
-      // Compare positions at each level
-      for (let i = 0; i < minLength; i++) {
-        if (a[i] !== b[i]) {
-          return a[i] - b[i];
-        }
-      }
-      
-      // If one path is a prefix of the other, shorter path comes first
-      return a.length - b.length;
-    };
-    
-    // Sort tasks based on their ancestral position paths
-    const sortedTasks = [...filteredTasks].sort((a, b) => {
-      const pathA = taskAncestries.get(a.id) || [];
-      const pathB = taskAncestries.get(b.id) || [];
-      return comparePaths(pathA, pathB);
-    });
+    // Sort by position
+    sortedTasks.sort((a, b) => a.position - b.position)
+
+    // If no tasks match our criteria, show empty state
+    if (sortedTasks.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+          <p className="mb-4 text-lg">No tasks here yet</p>
+          <button
+            onClick={() => onAddChild(focusedItemId)}
+            className="flex items-center justify-center w-10 h-10 text-white bg-blue-500 rounded-full hover:bg-blue-600"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </button>
+        </div>
+      )
+    }
 
     return (
       <div className="space-y-0.5">
-        {sortedTasks.map(task => {
+        {/* Add a drop zone at the beginning for empty lists or at position 0 */}
+        {sortedTasks.length === 0 ? (
+          <DropZone
+            parentId={focusedItemId || null}
+            position={0}
+            onMoveItemToPosition={onMoveItemToPosition}
+          />
+        ) : (
+          <DropZone
+            parentId={sortedTasks[0].parent_id}
+            position={0}
+            onMoveItemToPosition={onMoveItemToPosition}
+          />
+        )}
+        
+        {sortedTasks.map((task) => {
           // Show breadcrumbs if we're at root level or if we're focused and this task is deeper than the focused item
           const breadcrumbs = !focusedItemId
             ? getItemAncestry(task.id).slice(0, -1) // Show full ancestry except the task itself when at root
@@ -351,50 +385,58 @@ export function ItemList({
           const hasChildren = itemsByParent.has(task.id)
 
           return (
-            <div key={task.id} className="bg-white rounded">
-              {breadcrumbs.length > 0 && (
-                <div className="p-2 bg-gray-50 rounded-t">
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    {breadcrumbs.map((ancestor, i) => (
-                      <Fragment key={ancestor.id}>
-                        <button
-                          onClick={() => onFocus(ancestor.id)}
-                          className="hover:text-gray-900"
-                        >
-                          {ancestor.title}
-                        </button>
-                        {i < breadcrumbs.length - 1 && (
-                          <svg className="w-4 h-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </Fragment>
-                    ))}
+            <div key={task.id} className="py-0.5">
+              <div className="bg-white rounded">
+                {breadcrumbs.length > 0 && (
+                  <div className="p-2 bg-gray-50 rounded-t">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      {breadcrumbs.map((ancestor, i) => (
+                        <Fragment key={ancestor.id}>
+                          <button
+                            onClick={() => onFocus(ancestor.id)}
+                            className="hover:text-gray-900"
+                          >
+                            {ancestor.title}
+                          </button>
+                          {i < breadcrumbs.length - 1 && (
+                            <svg className="w-4 h-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </Fragment>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-              <Item
-                item={task}
-                onAddChild={onAddChild}
-                onToggleComplete={onToggleComplete}
-                onTypeChange={onTypeChange}
-                onMoveItem={onMoveItem}
-                onUpdateItem={onUpdateItem}
-                onDeleteItem={onDeleteItem}
-                onFocus={onFocus}
-                onAddDependency={onAddDependency}
-                onRemoveDependency={onRemoveDependency}
-                onAddDateDependency={onAddDateDependency}
-                onRemoveDateDependency={onRemoveDateDependency}
-                siblingCount={1}
-                itemPosition={0}
-                hasChildren={hasChildren}
-                childCount={itemsByParent.get(task.id)?.length || 0}
-                blockingTasks={dependenciesByTask.blocking.get(task.id) || []}
-                blockedByTasks={dependenciesByTask.blockedBy.get(task.id) || []}
-                dateDependency={dateDependencies.find(dep => dep.task_id === task.id)}
-                availableTasks={items}
-                childrenBlocked={hasChildren && areAllChildrenBlocked(task.id)}
+                )}
+                <Item
+                  item={task}
+                  onAddChild={onAddChild}
+                  onToggleComplete={onToggleComplete}
+                  onTypeChange={onTypeChange}
+                  onMoveItem={onMoveItem}
+                  onUpdateItem={onUpdateItem}
+                  onDeleteItem={onDeleteItem}
+                  onFocus={onFocus}
+                  onAddDependency={onAddDependency}
+                  onRemoveDependency={onRemoveDependency}
+                  onAddDateDependency={onAddDateDependency}
+                  onRemoveDateDependency={onRemoveDateDependency}
+                  siblingCount={1}
+                  itemPosition={0}
+                  hasChildren={hasChildren}
+                  childCount={itemsByParent.get(task.id)?.length || 0}
+                  blockingTasks={dependenciesByTask.blocking.get(task.id) || []}
+                  blockedByTasks={dependenciesByTask.blockedBy.get(task.id) || []}
+                  dateDependency={dateDependencies.find(dep => dep.task_id === task.id)}
+                  availableTasks={items}
+                  childrenBlocked={hasChildren && areAllChildrenBlocked(task.id)}
+                />
+              </div>
+              {/* Add a drop zone after each item */}
+              <DropZone
+                parentId={task.parent_id}
+                position={task.position + 1}
+                onMoveItemToPosition={onMoveItemToPosition}
               />
             </div>
           )
