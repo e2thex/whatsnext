@@ -150,7 +150,7 @@ export default function Home() {
         .from('items')
         .insert([
           {
-            title: 'New Item',
+            title: '', // Empty title so it will automatically open in edit mode
             parent_id: parentId,
             position: maxPosition + 1,
             manual_type: false,

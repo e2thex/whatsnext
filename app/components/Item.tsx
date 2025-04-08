@@ -97,7 +97,7 @@ export function Item({
   childrenBlocked = false
 }: ItemProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [isEditingTitle, setIsEditingTitle] = useState(item.title === '')
   const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [editedTitle, setEditedTitle] = useState(item.title)
   const [editedDescription, setEditedDescription] = useState(item.description || '')
@@ -113,6 +113,13 @@ export function Item({
   const descriptionInputRef = useRef<HTMLTextAreaElement>(null)
   const dependencyMenuRef = useRef<HTMLDivElement>(null)
   const dependencyButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Automatically focus title input for new/empty items
+  useEffect(() => {
+    if (item.title === '') {
+      setIsEditingTitle(true);
+    }
+  }, [item.id, item.title]);
 
   useEffect(() => {
     if (isEditingTitle && titleInputRef.current) {
@@ -152,8 +159,15 @@ export function Item({
   }, [isDependencyMenuOpen])
 
   const handleTitleSubmit = () => {
-    if (editedTitle.trim() !== '') {
-      onUpdateItem(item.id, { title: editedTitle.trim() })
+    const trimmedTitle = editedTitle.trim();
+    if (trimmedTitle !== '') {
+      onUpdateItem(item.id, { title: trimmedTitle })
+      setIsEditingTitle(false)
+    } else {
+      // If the title is empty after trimming, use a default title
+      const defaultTitle = 'New Item'
+      setEditedTitle(defaultTitle)
+      onUpdateItem(item.id, { title: defaultTitle })
       setIsEditingTitle(false)
     }
   }
