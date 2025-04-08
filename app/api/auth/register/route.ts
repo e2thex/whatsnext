@@ -1,37 +1,49 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Don't initialize Supabase at the module level to avoid build errors
-const getSupabaseClient = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase credentials are not available')
-  }
-  
-  return createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  })
-}
+// Don't need this function anymore since we're using the anon key client directly
+// Removing to fix the unused variable error
 
 export async function POST(request: Request) {
   try {
-    // Get environment variables or return error
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.log('Registration API called')
+    
+    // Log environment variable availability (not their values for security)
+    console.log('NEXT_PUBLIC_SUPABASE_URL available:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
+    console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY available:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+    
+    // Check for required environment variables
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error('Missing environment variables')
       return NextResponse.json(
-        { message: 'Server configuration error' },
+        { message: 'Server configuration error: Missing environment variables' },
         { status: 500 }
       )
     }
     
-    const { name, email, password } = await request.json()
+    // Parse the request body, with error handling
+    let name, email, password
+    try {
+      const body = await request.json()
+      name = body.name
+      email = body.email
+      password = body.password
+      console.log('Request body parsed successfully')
+    } catch (e) {
+      console.error('Error parsing request body:', e)
+      return NextResponse.json(
+        { message: 'Invalid request format' },
+        { status: 400 }
+      )
+    }
 
     // Validate inputs
     if (!email || !password || !name) {
+      console.log('Missing required fields:', { 
+        hasEmail: !!email, 
+        hasPassword: !!password, 
+        hasName: !!name 
+      })
       return NextResponse.json(
         { message: 'Email, password, and name are required' },
         { status: 400 }
@@ -42,12 +54,18 @@ export async function POST(request: Request) {
     const host = request.headers.get('host') || ''
     const protocol = host.includes('localhost') ? 'http' : 'https'
     const siteUrl = `${protocol}://${host}`
+    console.log('Generated site URL:', siteUrl)
     
-    // Initialize Supabase only when handling the request
-    const supabase = getSupabaseClient()
+    // Create a client with the anon key for auth operations
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    
+    // Create the client for auth operations
+    const client = createClient(supabaseUrl, supabaseAnonKey)
 
+    console.log('Attempting to sign up user with email:', email)
     // Sign up the user with redirect URL
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await client.auth.signUp({
       email,
       password,
       options: {
@@ -66,12 +84,14 @@ export async function POST(request: Request) {
 
     // Check if the user was created successfully
     if (!data.user) {
+      console.error('No user data returned from signUp')
       return NextResponse.json(
         { message: 'Failed to create user' },
         { status: 400 }
       )
     }
 
+    console.log('User created successfully with ID:', data.user.id)
     return NextResponse.json({ 
       success: true, 
       userId: data.user.id,
