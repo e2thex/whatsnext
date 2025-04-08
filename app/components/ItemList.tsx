@@ -292,9 +292,41 @@ export function ItemList({
              (showOnlyBlocked && isBlocked) // Show only blocked
     })
 
+    // Calculate ancestral paths for sorting
+    const taskAncestries = new Map<string, number[]>();
+    
+    filteredTasks.forEach(task => {
+      const ancestry = getItemAncestry(task.id);
+      // Create a position path array where each element is the position of that ancestor
+      const positionPath = ancestry.map(item => item.position);
+      taskAncestries.set(task.id, positionPath);
+    });
+    
+    // Compare two position paths lexicographically
+    const comparePaths = (a: number[], b: number[]): number => {
+      const minLength = Math.min(a.length, b.length);
+      
+      // Compare positions at each level
+      for (let i = 0; i < minLength; i++) {
+        if (a[i] !== b[i]) {
+          return a[i] - b[i];
+        }
+      }
+      
+      // If one path is a prefix of the other, shorter path comes first
+      return a.length - b.length;
+    };
+    
+    // Sort tasks based on their ancestral position paths
+    const sortedTasks = [...filteredTasks].sort((a, b) => {
+      const pathA = taskAncestries.get(a.id) || [];
+      const pathB = taskAncestries.get(b.id) || [];
+      return comparePaths(pathA, pathB);
+    });
+
     return (
       <div className="space-y-0.5">
-        {filteredTasks.map(task => {
+        {sortedTasks.map(task => {
           // Show breadcrumbs if we're at root level or if we're focused and this task is deeper than the focused item
           const breadcrumbs = !focusedItemId
             ? getItemAncestry(task.id).slice(0, -1) // Show full ancestry except the task itself when at root
