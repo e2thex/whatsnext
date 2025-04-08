@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { DndProvider } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
 import { ItemList } from './components/ItemList'
+import { Toolbar } from './components/Toolbar'
 import { supabase, type Database, type ItemType } from '../src/lib/supabase/client'
 
 type Item = Database['public']['Tables']['items']['Row']
@@ -22,6 +23,8 @@ export default function Home() {
   const [filterMode, setFilterMode] = useState<'all' | 'unblocked' | 'blocked'>('all')
   const [completionFilter, setCompletionFilter] = useState<'all' | 'completed' | 'not-completed'>('not-completed')
   const [searchQuery, setSearchQuery] = useState<string>('')
+  const [showOnlyActionable, setShowOnlyActionable] = useState(false)
+  const [showOnlyBlocked, setShowOnlyBlocked] = useState(false)
 
   useEffect(() => {
     const fetchUserAndData = async () => {
@@ -714,105 +717,21 @@ export default function Home() {
         )}
         <div className="max-w-6xl mx-auto">
           <div className="mb-6 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setViewMode(viewMode === 'tree' ? 'list' : 'tree')}
-                className={`
-                  px-3 py-1.5 rounded-md text-sm font-medium
-                  ${viewMode === 'tree' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-700 hover:bg-gray-100'}
-                `}
-              >
-                {viewMode === 'tree' ? 'Tree View' : 'List View'}
-              </button>
-              <button
-                onClick={() => setFilterMode(mode => {
-                  switch (mode) {
-                    case 'all': return 'unblocked'
-                    case 'unblocked': return 'blocked'
-                    case 'blocked': return 'all'
-                  }
-                })}
-                className={`
-                  p-1.5 rounded-md flex items-center justify-center
-                  ${filterMode === 'all' ? 'text-gray-600 hover:text-gray-800' : 
-                    filterMode === 'unblocked' ? 'text-green-600 hover:text-green-800' :
-                    'text-red-600 hover:text-red-800'}
-                `}
-                title={filterMode === 'all' ? 'Showing all tasks - Click to show unblocked tasks' :
-                       filterMode === 'unblocked' ? 'Showing unblocked tasks - Click to show blocked tasks' :
-                       'Showing blocked tasks - Click to show all tasks'}
-              >
-                <div className={`
-                  w-3 h-3 rounded-full
-                  ${filterMode === 'all' ? 'bg-gray-500' :
-                    filterMode === 'unblocked' ? 'bg-green-500' :
-                    'bg-red-500'}
-                `} />
-              </button>
-              <button
-                onClick={() => setCompletionFilter(mode => {
-                  switch (mode) {
-                    case 'all': return 'completed'
-                    case 'completed': return 'not-completed'
-                    case 'not-completed': return 'all'
-                  }
-                })}
-                className={`
-                  p-1.5 rounded-md flex items-center justify-center ml-1
-                  ${completionFilter === 'all' ? 'text-gray-600 hover:text-gray-800' : 
-                    completionFilter === 'completed' ? 'text-blue-600 hover:text-blue-800' :
-                    'text-yellow-600 hover:text-yellow-800'}
-                `}
-                title={completionFilter === 'all' ? 'Showing all tasks - Click to show completed tasks' :
-                       completionFilter === 'completed' ? 'Showing completed tasks - Click to show uncompleted tasks' :
-                       'Showing uncompleted tasks - Click to show all tasks'}
-              >
-                <div className="flex items-center justify-center">
-                  {completionFilter === 'all' && (
-                    <span className="text-xs font-medium">All</span>
-                  )}
-                  {completionFilter === 'completed' && (
-                    <svg className="w-4 h-4" viewBox="0 0 20 20">
-                      <rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="2" fill="none" />
-                      <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" d="M6 10l3 3 5-5" />
-                    </svg>
-                  )}
-                  {completionFilter === 'not-completed' && (
-                    <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5z" />
-                    </svg>
-                  )}
-                </div>
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search tasks..."
-                  className="px-3 py-1.5 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 w-52"
-                />
-                {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-              <button
-                onClick={() => handleAddChild(null)}
-                className="px-3 py-1.5 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700"
-              >
-                Add Task
-              </button>
-            </div>
+            <h1 className="text-2xl font-bold text-gray-900">WhatsNext</h1>
           </div>
+          <Toolbar
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            showOnlyActionable={showOnlyActionable}
+            onActionableChange={setShowOnlyActionable}
+            showOnlyBlocked={showOnlyBlocked}
+            onBlockedChange={setShowOnlyBlocked}
+            completionFilter={completionFilter}
+            onCompletionFilterChange={setCompletionFilter}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            onAddNewTask={() => handleAddChild(focusedItemId)}
+          />
           <ItemList
             items={items}
             dependencies={dependencies}
@@ -831,8 +750,8 @@ export default function Home() {
             onRemoveDateDependency={handleRemoveDateDependency}
             focusedItemId={focusedItemId}
             viewMode={viewMode}
-            showOnlyActionable={filterMode === 'unblocked'}
-            showOnlyBlocked={filterMode === 'blocked'}
+            showOnlyActionable={showOnlyActionable}
+            showOnlyBlocked={showOnlyBlocked}
             completionFilter={completionFilter}
             searchQuery={searchQuery}
           />

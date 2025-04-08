@@ -5,7 +5,7 @@ As a user, I want to have quick access to features that affect the display of it
 ## Meta Data
 | Section | Value |
 | ------- | ----- |
-| Completed | ✗ |
+| Completed | ✓ |
 | Epic | Task Organization |
 | Priority | Medium |
 
@@ -27,5 +27,17 @@ As a user, I want to have quick access to features that affect the display of it
 
 ## Implementation Notes
 
-- The Tool Bar will serve as a central location for users to access display-related features.
-- Further user stories will detail specific functionalities such as layout options and filtering mechanisms. 
+- The Tool Bar has been implemented as a React component in `app/components/Toolbar.tsx`
+- The Toolbar provides:
+  - A visual toggle for switching between Tree and List views
+  - Segmented controls for filtering by completion status (All/Todo/Done)
+  - Segmented controls for filtering by task status (Any/Actionable/Blocked)
+  - Search functionality with keyboard shortcuts (/ to focus, Esc to clear)
+  - An "Add Task" button
+- The component is responsive, with appropriate adaptations for mobile devices
+- Keyboard accessibility has been implemented for all features
+
+## Related Components
+
+- `app/components/Toolbar.tsx` - Main implementation
+- `app/page.tsx` - Integration with the main application 
