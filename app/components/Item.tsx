@@ -487,11 +487,6 @@ export function Item({
                       {highlightMatchingText(displayDescription, searchQuery.trim())}
                     </p>
                   )}
-                  {!displayDescription && (
-                    <p className="mt-1 text-sm text-gray-400 cursor-text hover:text-gray-500">
-                      Add description...
-                    </p>
-                  )}
                 </div>
               )}
             </div>

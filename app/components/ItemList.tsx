@@ -151,18 +151,18 @@ export function ItemList({
     return { blocking, blockedBy }
   }, [dependencies])
 
-  // Get the ancestry chain for any item - Wrapped in useCallback
+  // Get the ancestry chain for any item
   const getItemAncestry = useCallback((itemId: string): ItemRow[] => {
-    const ancestry: ItemRow[] = []
-    let currentItem = items.find(item => item.id === itemId)
+    const ancestry: ItemRow[] = [];
+    let currentItem = items.find(item => item.id === itemId);
     
     while (currentItem) {
-      ancestry.unshift(currentItem)
-      currentItem = items.find(item => item.id === currentItem?.parent_id)
+      ancestry.unshift(currentItem); // Add to the beginning of the array
+      currentItem = items.find(item => item.id === currentItem?.parent_id);
     }
     
-    return ancestry
-  }, [items])
+    return ancestry;
+  }, [items]);
 
   // Get the path from ancestor to descendant (inclusive)
   const getPathBetweenItems = (ancestorId: string, descendantId: string): ItemRow[] => {
@@ -442,7 +442,7 @@ export function ItemList({
       // Compare each level of ancestry
       const minLength = Math.min(aAncestry.length, bAncestry.length);
       
-      for (let i = 0; i < minLength - 1; i++) {
+      for (let i = 0; i < minLength; i++) {
         // If ancestors differ at this level, sort by position
         if (aAncestry[i].id !== bAncestry[i].id) {
           return aAncestry[i].position - bAncestry[i].position;
