@@ -40,6 +40,7 @@
 | ✓ | User Interface | As a user, I want to see the count of blocking and blocked tasks through prominent colored indicators (red for blocked by, green for blocking) so I can quickly understand task dependencies |
 | ✓ | User Interface | As a user, I want a more compact layout without borders around tasks and reduced whitespace between items so I can see more tasks at once while maintaining clarity |
 | ✓ | User Interface | As a user, I want line breaks in task descriptions to be preserved so I can format my notes with proper spacing and structure |
+| ✓ | User Interface | As a user, I want each task type to have a distinct and intuitive icon (checkbox for Task, document for Mission, flag for Objective, rocket for Ambition) so I can quickly identify task types at a glance |
 | ✓ | Task Management | As a user, I want to be able to edit task titles and descriptions inline so that I can quickly update information |
 | ✓ | Task Management | As a user, I want to be able to delete tasks with options for handling children so that I can maintain my task hierarchy effectively |
 | ✓ | Task Management | As a user, when I add a new task, I want it to have an empty title with the edit mode automatically activated so that I can quickly type what I want |
@@ -63,10 +64,10 @@
 - User-specific data isolation
 
 ### Task Types
-- **Task**: Items without children
-- **Mission**: Items with one level of children
-- **Objective**: Items with two or more levels of children
-- **Ambition**: Root level items
+- **Task**: Items without children, represented by a checkbox icon
+- **Mission**: Items with one level of children, represented by a document/checklist icon
+- **Objective**: Items with two or more levels of children, represented by a flag icon
+- **Ambition**: Root level items, represented by a rocket icon
 - Manual override available with visual distinction
 - Automatic classification can be restored
 

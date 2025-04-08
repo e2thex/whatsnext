@@ -234,6 +234,33 @@ export function Item({
     Ambition: 'ring-red-500'
   } as const
 
+  // SVG icons for each type
+  const typeIcons = {
+    Task: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+        <rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="2" fill="none" />
+      </svg>
+    ),
+    Mission: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+        <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+      </svg>
+    ),
+    Objective: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 8l2.55 3.4A1 1 0 0116 13H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clipRule="evenodd" />
+      </svg>
+    ),
+    Ambition: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20">
+        <path d="M10,2 L7,14 L10,12 L13,14 L10,2 Z" fill="currentColor" />
+        <path d="M8,14 L6,17 L7.5,16.5 L9,18 L8,14 Z" fill="currentColor" />
+        <path d="M12,14 L14,17 L12.5,16.5 L11,18 L12,14 Z" fill="currentColor" />
+      </svg>
+    )
+  } as const;
+
   const isBlocked = isItemBlocked(item, blockedByTasks, availableTasks, hasChildren, childrenBlocked, dateDependency)
 
   // Get the title and description from the current item for display
@@ -261,7 +288,7 @@ export function Item({
             onClick={() => onToggleComplete(item.id)}
             disabled={isBlocked}
             className={`
-              w-5 h-5 rounded border
+              w-5 h-5 rounded border flex items-center justify-center
               ${item.completed ? 'bg-green-500 border-green-600' : 'border-gray-300'}
               ${isBlocked ? 'cursor-not-allowed' : ''}
             `}
@@ -340,13 +367,23 @@ export function Item({
                       {displayTitle}
                     </span>
                     {item.type && (
-                      <span className={`
-                        px-2 py-1 text-xs font-medium rounded-full
-                        ${typeColors[item.type as keyof typeof typeColors]}
-                        ${item.manual_type ? `ring-2 ${typeRingColors[item.type as keyof typeof typeRingColors]}` : ''}
-                      `}>
-                        {item.type}
-                      </span>
+                      <div className="relative group/tooltip">
+                        <div className={`
+                          p-1 rounded-full inline-flex items-center justify-center
+                          ${typeColors[item.type as keyof typeof typeColors]}
+                          ${item.manual_type ? `ring-1 ${typeRingColors[item.type as keyof typeof typeRingColors]}` : ''}
+                        `}>
+                          {typeIcons[item.type as keyof typeof typeIcons]}
+                        </div>
+                        {/* Tooltip that appears on hover */}
+                        <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 translate-y-full 
+                                        opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 
+                                        pointer-events-none z-10">
+                          <div className="bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
+                            {item.type} {item.manual_type && '(Manual)'}
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
                   {displayDescription && (
