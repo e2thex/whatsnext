@@ -1,8 +1,33 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/src/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+
+// Don't initialize Supabase at the module level to avoid build errors
+const getSupabaseClient = () => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase credentials are not available')
+  }
+  
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+}
 
 export async function POST(request: Request) {
   try {
+    // Get environment variables or return error
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json(
+        { message: 'Server configuration error' },
+        { status: 500 }
+      )
+    }
+    
     const { name, email, password } = await request.json()
 
     // Validate inputs
@@ -17,35 +42,45 @@ export async function POST(request: Request) {
     const host = request.headers.get('host') || ''
     const protocol = host.includes('localhost') ? 'http' : 'https'
     const siteUrl = `${protocol}://${host}`
+    
+    // Initialize Supabase only when handling the request
+    const supabase = getSupabaseClient()
 
-    // Create the user with Supabase
-    const { data, error } = await supabase.auth.admin.createUser({
+    // Sign up the user with redirect URL
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      email_confirm: false,
-      user_metadata: { name },
-      app_metadata: { role: 'user' },
-      // Set the redirect URL to the production URL
       options: {
-        email_confirm: true,
         data: { name },
-        redirect_to: `${siteUrl}/login?verified=true`,
+        emailRedirectTo: `${siteUrl}/login?verified=true`,
       },
     })
 
     if (error) {
-      console.error('Error creating user:', error)
+      console.error('Error signing up user:', error)
       return NextResponse.json(
         { message: error.message },
         { status: 400 }
       )
     }
 
-    return NextResponse.json({ success: true, userId: data.user.id })
+    // Check if the user was created successfully
+    if (!data.user) {
+      return NextResponse.json(
+        { message: 'Failed to create user' },
+        { status: 400 }
+      )
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      userId: data.user.id,
+      message: 'Please check your email for confirmation link'
+    })
   } catch (error) {
     console.error('Registration error:', error)
     return NextResponse.json(
-      { message: 'An unexpected error occurred' },
+      { message: error instanceof Error ? error.message : 'An unexpected error occurred' },
       { status: 500 }
     )
   }
