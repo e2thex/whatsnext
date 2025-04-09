@@ -24,7 +24,7 @@ interface ItemProps {
   onRemoveDependency: (blockingTaskId: string, blockedTaskId: string) => void
   onAddDateDependency: (taskId: string, unblockAt: Date) => void
   onRemoveDateDependency: (taskId: string) => void
-  onCreateSubtask?: (parentId: string, title: string) => void
+  onCreateSubtask?: (parentId: string, title: string, position: number) => void
   onReorderSubtasks?: (parentId: string, subtaskIds: string[]) => void
   siblingCount: number
   itemPosition: number
@@ -352,31 +352,60 @@ export function Item({
     // Arrays to store results
     const contentLines: string[] = [];
     const existingSubtasks: { id: string, title: string, position: number }[] = [];
-    const newSubtasks: string[] = [];
+    const newSubtasks: { title: string, position: number }[] = [];
+    
+    // Keep track of all subtasks (both existing and new) to determine final positions
+    const allSubtasks: { id?: string, title: string, isNew: boolean, originalIndex: number }[] = [];
     
     // Process each line
-    lines.forEach(line => {
+    lines.forEach((line, index) => {
       const existingMatch = line.match(existingSubtaskRegex);
       const newMatch = line.match(newSubtaskRegex);
       
       if (existingMatch) {
         // This is an existing subtask
-        existingSubtasks.push({
+        allSubtasks.push({
           id: existingMatch[2],
           title: existingMatch[1],
-          position: existingSubtasks.length
+          isNew: false,
+          originalIndex: index
         });
       } else if (newMatch) {
         // This is a new subtask to create
-        newSubtasks.push(newMatch[1].trim());
+        allSubtasks.push({
+          title: newMatch[1].trim(),
+          isNew: true,
+          originalIndex: index
+        });
       } else {
         // This is regular content
         contentLines.push(line);
       }
     });
     
+    // Sort subtasks by their order in the original content
+    allSubtasks.sort((a, b) => a.originalIndex - b.originalIndex);
+    
+    // Now assign positions based on sorted order
+    allSubtasks.forEach((subtask, position) => {
+      if (subtask.isNew) {
+        newSubtasks.push({
+          title: subtask.title,
+          position: position
+        });
+      } else if (subtask.id) {
+        existingSubtasks.push({
+          id: subtask.id,
+          title: subtask.title,
+          position: position
+        });
+      }
+    });
+    
     // Join the content lines back together
     const cleanContent = contentLines.join('\n').trim();
+    
+    logDebug('Parsed subtasks', { allSubtasks, existingSubtasks, newSubtasks });
     
     return { cleanContent, existingSubtasks, newSubtasks };
   };
@@ -614,8 +643,10 @@ export function Item({
       
       // Handle new subtasks if the handler is provided
       if (onCreateSubtask && newSubtasks.length > 0) {
-        newSubtasks.forEach(subtaskTitle => {
-          onCreateSubtask(item.id, subtaskTitle);
+        // Create each new subtask with its actual position
+        newSubtasks.forEach(subtask => {
+          logDebug('Creating subtask at position', { title: subtask.title, position: subtask.position });
+          onCreateSubtask(item.id, subtask.title, subtask.position);
         });
       }
       
@@ -623,6 +654,7 @@ export function Item({
       if (onReorderSubtasks && existingSubtasks.length > 0) {
         // Extract the IDs in the new order
         const orderedIds = existingSubtasks.map(subtask => subtask.id);
+        logDebug('Reordering subtasks', orderedIds);
         onReorderSubtasks(item.id, orderedIds);
       }
       

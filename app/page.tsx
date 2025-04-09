@@ -704,46 +704,84 @@ export default function Home() {
     }
   }
 
-  const createSubtask = async (parentId: string, title: string) => {
+  const createSubtask = async (parentId: string, title: string, position: number) => {
+    console.log('Creating subtask with explicit position:', { parentId, title, position });
+    
     try {
       if (!userId) {
-        throw new Error('No user logged in')
+        throw new Error('No user logged in');
       }
       
-      // Get the number of existing children for positioning
-      const siblings = items.filter(item => item.parent_id === parentId);
-      const maxPosition = siblings.length > 0 
-        ? Math.max(...siblings.map(s => s.position)) + 1 
-        : 0;
-      
-      // Create a new item as a subtask
-      const { data: newItem, error } = await supabase
+      // Get existing tasks for the parent
+      const { data: existingSubtasks } = await supabase
         .from('items')
-        .insert({
-          title,
-          parent_id: parentId,
-          position: maxPosition,
-          completed: false,
-          user_id: userId,
-          manual_type: false
-        })
+        .select('*')
+        .eq('parent_id', parentId)
+        .order('position', { ascending: true });
+      
+      console.log('Existing subtasks before insert:', existingSubtasks);
+      
+      // Prepare new subtask data
+      const newTaskData = {
+        title,
+        parent_id: parentId,
+        user_id: userId,
+        position: position // Use the exact position provided
+      };
+      
+      // First insert the new task
+      const { data: newTask, error } = await supabase
+        .from('items')
+        .insert(newTaskData)
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating subtask:', error);
+        toast.error('Failed to create subtask');
+        return;
+      }
       
-      // Update the local state
-      setItems(prev => [...prev, newItem]);
+      console.log('New subtask created:', newTask);
       
-      // Update child count tracking
-      setChildCount(prev => ({
-        ...prev,
-        [parentId]: (prev[parentId] || 0) + 1
-      }));
+      // Add the new task to our local state
+      setItems(prev => [...prev, newTask]);
       
-      toast.success('Subtask created successfully');
+      // If needed, update the positions of other tasks to make room
+      if (existingSubtasks && existingSubtasks.length > 0) {
+        // Update positions of tasks that should come after the new task
+        const tasksToUpdate = existingSubtasks
+          .filter(task => task.position >= position)
+          .map(task => ({
+            id: task.id,
+            position: task.position + 1 // Increment position for affected tasks
+          }));
+        
+        if (tasksToUpdate.length > 0) {
+          console.log('Adjusting positions for existing tasks:', tasksToUpdate);
+          
+          // Update each task's position one by one to avoid conflicts
+          for (const task of tasksToUpdate) {
+            const { error: updateError } = await supabase
+              .from('items')
+              .update({ position: task.position })
+              .eq('id', task.id);
+              
+            if (updateError) {
+              console.error('Error updating task position:', updateError);
+            } else {
+              // Update position in our local state
+              setItems(prev => prev.map(item => 
+                item.id === task.id ? { ...item, position: task.position } : item
+              ));
+            }
+          }
+        }
+      }
+      
+      toast.success('Subtask created');
     } catch (error) {
-      console.error('Error creating subtask:', error);
+      console.error('Error in createSubtask:', error);
       toast.error('Failed to create subtask');
     }
   };
