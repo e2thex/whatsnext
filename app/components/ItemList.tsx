@@ -99,6 +99,7 @@ export interface ItemListProps {
   completionFilter: 'all' | 'completed' | 'not-completed'
   searchQuery: string
   childCount?: Record<string, number>
+  onUpdateSubtask?: (subtaskId: string, updates: { title: string; position: number }) => void
 }
 
 export function ItemList({ 
@@ -125,7 +126,8 @@ export function ItemList({
   showOnlyBlocked,
   completionFilter,
   searchQuery,
-  childCount = {}
+  childCount = {},
+  onUpdateSubtask
 }: ItemListProps) {
   const itemsByParent = useMemo(() => {
     const map = new Map<string | null, ItemRow[]>()
@@ -327,6 +329,7 @@ export function ItemList({
             onAddDateDependency={onAddDateDependency}
             onRemoveDateDependency={onRemoveDateDependency}
             onCreateSubtask={createSubtask}
+            onUpdateSubtask={onUpdateSubtask}
             onReorderSubtasks={reorderSubtasks}
             siblingCount={childItems.length}
             itemPosition={index}
@@ -527,6 +530,7 @@ export function ItemList({
                   onAddDateDependency={onAddDateDependency}
                   onRemoveDateDependency={onRemoveDateDependency}
                   onCreateSubtask={createSubtask}
+                  onUpdateSubtask={onUpdateSubtask}
                   onReorderSubtasks={reorderSubtasks}
                   siblingCount={1}
                   itemPosition={0}
@@ -606,6 +610,7 @@ export function ItemList({
                       onAddDateDependency={onAddDateDependency}
                       onRemoveDateDependency={onRemoveDateDependency}
                       onCreateSubtask={createSubtask}
+                      onUpdateSubtask={onUpdateSubtask}
                       onReorderSubtasks={reorderSubtasks}
                       siblingCount={childItems.length}
                       itemPosition={0}

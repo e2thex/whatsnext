@@ -25,6 +25,7 @@ interface ItemProps {
   onAddDateDependency: (taskId: string, unblockAt: Date) => void
   onRemoveDateDependency: (taskId: string) => void
   onCreateSubtask?: (parentId: string, title: string, position: number) => void
+  onUpdateSubtask?: (subtaskId: string, updates: { title: string; position: number }) => void
   onReorderSubtasks?: (parentId: string, subtaskIds: string[]) => void
   siblingCount: number
   itemPosition: number
@@ -94,6 +95,7 @@ export function Item({
   onAddDateDependency,
   onRemoveDateDependency,
   onCreateSubtask,
+  onUpdateSubtask,
   onReorderSubtasks,
   siblingCount,
   itemPosition,
@@ -136,6 +138,35 @@ export function Item({
   const typeMenuRef = useRef<HTMLDivElement>(null)
   const typeButtonRef = useRef<HTMLDivElement>(null)
   const depSuggestionsRef = useRef<HTMLDivElement>(null)
+
+  // First add a new state variable to track subtasks pending deletion
+  const [deletingSubtaskId, setDeletingSubtaskId] = useState<string | null>(null);
+  const [currentChildItems, setCurrentChildItems] = useState<ItemRow[]>([]);
+  // Add a state to track all deleted subtasks and their metadata for consistent display
+  const [deletedSubtasksQueue, setDeletedSubtasksQueue] = useState<{ id: string, title: string }[]>([]);
+  // Track if we're in the process of deleting subtasks to prevent new creation
+  const [isProcessingDeletion, setIsProcessingDeletion] = useState(false);
+  
+  // Add new state to track pending operations after deletion
+  const [pendingOperations, setPendingOperations] = useState<{
+    title: string;
+    description: string | undefined;
+    newSubtasks: { title: string, position: number }[];
+    existingSubtaskIds: string[];
+    dependencies: { id: string, title: string }[];
+    subtasksToProcess?: { id?: string, title: string, position: number }[];
+  } | null>(null);
+
+  // Add a useEffect to initialize currentChildItems when we start editing
+  useEffect(() => {
+    if (isEditing && hasChildren) {
+      const childItems = availableTasks
+        .filter(task => task.parent_id === item.id)
+        .sort((a, b) => a.position - b.position);
+      
+      setCurrentChildItems(childItems);
+    }
+  }, [isEditing, hasChildren, item.id, availableTasks]);
 
   // Add a console debug function
   const logDebug = (message: string, data?: unknown) => {
@@ -340,7 +371,7 @@ export function Item({
     return { cleanContent, dependencies };
   };
 
-  // Add a new function to parse content and extract subtasks
+  // Parse content and extract subtasks
   const parseContentAndSubtasks = (content: string) => {
     // First split content into lines
     const lines = content.split('\n');
@@ -354,6 +385,13 @@ export function Item({
     const existingSubtasks: { id: string, title: string, position: number }[] = [];
     const newSubtasks: { title: string, position: number }[] = [];
     
+    // Track current subtasks from database
+    const currentSubtasks = currentChildItems.map(item => ({
+      id: item.id,
+      title: item.title,
+      stillExists: false // Flag to track if this subtask still exists in the content
+    }));
+    
     // Keep track of all subtasks (both existing and new) to determine final positions
     const allSubtasks: { id?: string, title: string, isNew: boolean, originalIndex: number }[] = [];
     
@@ -364,24 +402,47 @@ export function Item({
       
       if (existingMatch) {
         // This is an existing subtask
+        const id = existingMatch[2];
+        const title = existingMatch[1];
+        
+        // Mark this subtask as still existing
+        const currentSubtask = currentSubtasks.find(s => s.id === id);
+        if (currentSubtask) {
+          currentSubtask.stillExists = true;
+        }
+        
         allSubtasks.push({
-          id: existingMatch[2],
-          title: existingMatch[1],
+          id,
+          title,
           isNew: false,
           originalIndex: index
         });
-      } else if (newMatch) {
-        // This is a new subtask to create
-        allSubtasks.push({
-          title: newMatch[1].trim(),
-          isNew: true,
-          originalIndex: index
-        });
+      } else if (newMatch && !isProcessingDeletion) {
+        // This is a new subtask to create - but ONLY if we're not in deletion mode
+        const title = newMatch[1].trim();
+        
+        // Check if this might be a "recreated" subtask that was previously deleted
+        // If so, we'll ignore it to prevent incorrect recreation during deletion
+        const matchesDeletedSubtask = currentSubtasks.some(s => 
+          !s.stillExists && s.title.toLowerCase() === title.toLowerCase());
+        
+        if (!matchesDeletedSubtask) {
+          allSubtasks.push({
+            title,
+            isNew: true,
+            originalIndex: index
+          });
+        }
       } else {
         // This is regular content
         contentLines.push(line);
       }
     });
+    
+    // Find deleted subtasks - those that existed before but aren't marked as still existing
+    const deletedSubtasks = currentSubtasks
+      .filter(s => !s.stillExists)
+      .map(s => ({ id: s.id, title: s.title }));
     
     // Sort subtasks by their order in the original content
     allSubtasks.sort((a, b) => a.originalIndex - b.originalIndex);
@@ -405,9 +466,9 @@ export function Item({
     // Join the content lines back together
     const cleanContent = contentLines.join('\n').trim();
     
-    logDebug('Parsed subtasks', { allSubtasks, existingSubtasks, newSubtasks });
+    logDebug('Parsed subtasks', { allSubtasks, existingSubtasks, newSubtasks, deletedSubtasks });
     
-    return { cleanContent, existingSubtasks, newSubtasks };
+    return { cleanContent, existingSubtasks, newSubtasks, deletedSubtasks };
   };
   
   // Completely rewrite handleTextareaKeyDown for better handling
@@ -607,29 +668,133 @@ export function Item({
     setShowDepSuggestions(false);
   };
   
-  // Update the handleContentSubmit function to handle dependencies and subtasks
+  // Now modify the handleContentSubmit function with a simpler, more functional approach
   const handleContentSubmit = () => {
+    // If we're in the process of deleting subtasks, don't proceed with the normal save flow
+    if (isProcessingDeletion) {
+      logDebug('Skipping normal submit during deletion process');
+      return;
+    }
+    
     // Parse content and extract dependencies
     const { cleanContent: contentWithoutDeps, dependencies } = parseContentAndDependencies(editedContent);
     
-    // Now parse the remaining content for subtasks
-    const { cleanContent, existingSubtasks, newSubtasks } = parseContentAndSubtasks(contentWithoutDeps);
-    
-    // Split content by lines (after removing subtasks)
-    const contentLines = cleanContent.split('\n');
+    // Split content by lines
+    const contentLines = contentWithoutDeps.split('\n');
     const title = contentLines[0].trim();
-    const description = contentLines.slice(1).join('\n').trim();
+    const description = contentLines.slice(1).filter(line => !line.trim().startsWith('- ')).join('\n').trim();
     
-    if (title !== '') {
-      logDebug('Submitting content', { title, description, existingSubtasks, newSubtasks });
+    // Basic validation - title is required
+    if (title === '') {
+      toast.error('Task title cannot be empty');
+      contentInputRef.current?.focus();
+      return;
+    }
+    
+    // STEP 1: Get current subtasks from database
+    const currentSubtasks = availableTasks
+      .filter(task => task.parent_id === item.id)
+      .map(task => ({ id: task.id, title: task.title }));
+    
+    // STEP 2: Parse the subtasks from content
+    const subtasksToProcess: { id?: string, title: string, position: number }[] = [];
+    
+    // Find all lines that start with "- " and parse them
+    contentLines.forEach((line, index) => {
+      // Check for existing subtask format: - [Title](#id)
+      const existingMatch = line.trim().match(/^-\s*\[(.*?)\]\(#(.*?)\)$/);
+      // Check for new subtask format: - Title
+      const newMatch = line.trim().match(/^-\s+(.+)$/);
       
-      // Update the item
-      onUpdateItem(item.id, { 
-        title, 
-        description: description || undefined 
+      if (existingMatch) {
+        // This is an existing subtask
+        subtasksToProcess.push({
+          id: existingMatch[2],
+          title: existingMatch[1].trim(),
+          position: subtasksToProcess.length
+        });
+      } else if (newMatch) {
+        // This is a new subtask to create
+        subtasksToProcess.push({
+          title: newMatch[1].trim(),
+          position: subtasksToProcess.length
+        });
+      }
+    });
+    
+    // Find subtasks to delete (in currentSubtasks but not in subtasksToProcess)
+    const subtasksToDelete = currentSubtasks.filter(
+      current => !subtasksToProcess.some(toProcess => toProcess.id === current.id)
+    );
+    
+    logDebug('Subtask processing', {
+      currentSubtasks: currentSubtasks.length,
+      subtasksToProcess: subtasksToProcess.length,
+      subtasksToDelete: subtasksToDelete.length
+    });
+    
+    // Handle deletions first if there are any
+    if (subtasksToDelete.length > 0) {
+      // Set deletion mode
+      setIsProcessingDeletion(true);
+      
+      // Store the pending work for after deletion
+      setPendingOperations({
+        title,
+        description: description || undefined,
+        dependencies,
+        subtasksToProcess
       });
       
-      // Process dependencies - add new ones that don't exist
+      // Start deletion process
+      setDeletedSubtasksQueue(subtasksToDelete);
+      setDeletingSubtaskId(subtasksToDelete[0].id);
+    }
+    
+    // No deletions needed, proceed with update and create
+    performContentUpdate(title, description, dependencies);
+    processSubtasks(subtasksToProcess);
+  };
+  
+  // Process subtasks function to handle adding/updating
+  const processSubtasks = (subtasks: { id?: string, title: string, position: number }[]) => {
+    console.log('Processing subtasks', subtasks);
+    // Process each subtask - using a more functional approach
+    subtasks.forEach(subtask => {
+      if (!subtask.id) {
+        // This is a new subtask - create it
+        if (onCreateSubtask) {
+          onCreateSubtask(item.id, subtask.title, subtask.position);
+        }
+      } else {
+        // This is an existing subtask - update it
+        if (onUpdateSubtask) {
+          // Update the title and position directly
+          onUpdateSubtask(subtask.id, { 
+            title: subtask.title, 
+            position: subtask.position 
+          });
+        }
+      }
+    });
+    
+    // We no longer need the separate reordering step as each subtask is updated individually
+    // with its position, which is a more functional approach
+  };
+  
+  // Update content only (title, description, dependencies)
+  const performContentUpdate = (
+    title: string, 
+    description?: string, 
+    dependencies?: {id: string, title: string}[]
+  ) => {
+    logDebug('Updating content', { title, description: description || 'none' });
+    
+    // Update the item title and description
+    onUpdateItem(item.id, { title, description });
+    
+    // Process dependencies if provided
+    if (dependencies) {
       dependencies.forEach(dep => {
         const existingDep = blockedByTasks.find(
           blockDep => blockDep.blocking_task_id === dep.id
@@ -640,31 +805,67 @@ export function Item({
           onAddDependency(dep.id, item.id);
         }
       });
+    }
+    
+    // Exit editing mode
+    setIsEditing(false);
+    toast.success('Task updated successfully');
+  };
+
+  // Add a callback to handle when delete is confirmed - completely rewritten
+  const handleDeleteSubtaskConfirmed = (deleteChildren: boolean) => {
+    if (deletingSubtaskId) {
+      // Find the current subtask from our queue
+      const currentSubtask = deletedSubtasksQueue.find(s => s.id === deletingSubtaskId);
       
-      // Handle new subtasks if the handler is provided
-      if (onCreateSubtask && newSubtasks.length > 0) {
-        // Create each new subtask with its actual position
-        newSubtasks.forEach(subtask => {
-          logDebug('Creating subtask at position', { title: subtask.title, position: subtask.position });
-          onCreateSubtask(item.id, subtask.title, subtask.position);
-        });
+      // Get the subtask title for logging
+      const subtaskTitle = currentSubtask?.title || 'Unknown Subtask';
+      logDebug('Deleting subtask', subtaskTitle);
+      
+      // Call the existing delete function
+      onDeleteItem(deletingSubtaskId, deleteChildren);
+      
+      // Remove the current subtask from the queue
+      const updatedQueue = deletedSubtasksQueue.filter(s => s.id !== deletingSubtaskId);
+      setDeletedSubtasksQueue(updatedQueue);
+      
+      // Check if there are more subtasks to delete
+      if (updatedQueue.length > 0) {
+        // Process the next deleted subtask
+        setTimeout(() => {
+          setDeletingSubtaskId(updatedQueue[0].id);
+        }, 100); // Small delay to ensure UI updates correctly
+      } else {
+        // All deletions are completed
+        logDebug('All subtask deletions completed - proceeding with pending operations');
+        
+        // Reset deletion states
+        setDeletingSubtaskId(null);
+        
+        // Add small delay before proceeding with other operations
+        setTimeout(() => {
+          // Now perform the pending operations if they exist
+          if (pendingOperations) {
+            const { title, description, dependencies, subtasksToProcess = [] } = pendingOperations;
+            
+            // First update the content
+            performContentUpdate(title, description, dependencies);
+            
+            // Then process the subtasks
+            if (subtasksToProcess.length > 0) {
+              setTimeout(() => {
+                processSubtasks(subtasksToProcess);
+              }, 50);
+            }
+            
+            // Clear pending operations
+            setPendingOperations(null);
+          }
+          
+          // Turn off deletion mode
+          setIsProcessingDeletion(false);
+        }, 150);
       }
-      
-      // Handle reordering of existing subtasks if the handler is provided
-      if (onReorderSubtasks && existingSubtasks.length > 0) {
-        // Extract the IDs in the new order
-        const orderedIds = existingSubtasks.map(subtask => subtask.id);
-        logDebug('Reordering subtasks', orderedIds);
-        onReorderSubtasks(item.id, orderedIds);
-      }
-      
-      setIsEditing(false);
-      toast.success('Task updated successfully');
-    } else {
-      // Show validation error
-      toast.error('Task title cannot be empty');
-      // Keep focus in the editor
-      contentInputRef.current?.focus();
     }
   };
 
@@ -1318,6 +1519,27 @@ export function Item({
         currentTaskId={item.id}
         availableTasks={filteredTasks}
       />
+      
+      {/* Subtask deletion confirmation dialog */}
+      {deletingSubtaskId && (
+        <DeleteConfirmationDialog
+          isOpen={!!deletingSubtaskId}
+          onClose={() => {
+            // Clear the deletion queue and reset
+            setDeletedSubtasksQueue([]);
+            setDeletingSubtaskId(null);
+            setIsProcessingDeletion(false);
+            // Resume save workflow
+            handleContentSubmit();
+          }}
+          onConfirm={(deleteChildren) => {
+            handleDeleteSubtaskConfirmed(deleteChildren);
+          }}
+          hasChildren={!!availableTasks.some(task => task.parent_id === deletingSubtaskId)}
+          itemTitle={deletedSubtasksQueue.find(s => s.id === deletingSubtaskId)?.title || 'Unknown Subtask'}
+          childCount={availableTasks.filter(task => task.parent_id === deletingSubtaskId).length}
+        />
+      )}
     </div>
   )
 } 

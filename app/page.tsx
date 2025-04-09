@@ -833,6 +833,39 @@ export default function Home() {
     }
   };
 
+  // Update a subtask with new title and position
+  const updateSubtask = async (subtaskId: string, updates: { title: string; position: number }) => {
+    try {
+      const { error } = await supabase
+        .from('items')
+        .update({
+          title: updates.title,
+          position: updates.position
+        })
+        .eq('id', subtaskId);
+
+      if (error) {
+        console.error('Error updating subtask:', error);
+        toast.error('Failed to update subtask');
+        return;
+      }
+      
+      // Update the local state
+      setItems(prevItems => 
+        prevItems.map(item => 
+          item.id === subtaskId 
+            ? { ...item, title: updates.title, position: updates.position }
+            : item
+        )
+      );
+      
+      toast.success('Subtask updated');
+    } catch (err) {
+      console.error('Error updating subtask:', err);
+      toast.error('Failed to update subtask');
+    }
+  };
+
   if (isLoading) {
     return <div>Loading...</div>
   }
@@ -884,6 +917,7 @@ export default function Home() {
             completionFilter={completionFilter}
             searchQuery={searchQuery}
             childCount={childCount}
+            onUpdateSubtask={updateSubtask}
           />
         </div>
       </main>
