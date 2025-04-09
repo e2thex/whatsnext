@@ -241,7 +241,7 @@ export function Item({
         }
       }, 10);
     }
-  }, [isEditing, item.title, item.description, formatDependenciesForEditing, blockedByTasks, availableTasks, hasChildren, children]);
+  }, [isEditing, item.title, item.description]);
 
   // Close dependency suggestions when clicking outside
   useEffect(() => {
@@ -707,7 +707,10 @@ export function Item({
 
         <div className="flex items-center gap-4">
           <button
-            onClick={() => onToggleComplete(item.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleComplete(item.id);
+            }}
             disabled={isBlocked}
             className={`
               w-5 h-5 rounded border flex items-center justify-center
@@ -727,7 +730,10 @@ export function Item({
             <div className="flex items-center gap-2">
               {hasChildren && (
                 <button
-                  onClick={() => setIsCollapsed(!isCollapsed)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsCollapsed(!isCollapsed);
+                  }}
                   className="p-1 -ml-2 text-gray-500 hover:text-gray-700"
                 >
                   <svg 
@@ -744,17 +750,17 @@ export function Item({
                 </button>
               )}
               {isEditing ? (
-                <div className="flex-grow relative">
+                <div className="flex-grow relative" onClick={(e) => e.stopPropagation()}>
                   <textarea
                     ref={contentInputRef}
                     value={editedContent}
                     onChange={handleTextareaChange}
-                    onBlur={handleContentSubmit}
                     onKeyDown={handleTextareaKeyDown}
                     className="w-full px-1 py-0.5 text-base font-medium border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none min-h-[60px] bg-white text-gray-800"
                     rows={Math.max(2, editedContent.split('\n').length)}
                     placeholder="Type title here (first line)&#10;Add details here (following lines). Type @ to mention dependencies."
                     onInput={handleTextareaResize}
+                    onClick={(e) => e.stopPropagation()}
                   />
                   <div className="absolute inset-x-0 top-[24px] border-t border-gray-200 opacity-50 pointer-events-none" />
                   <div className="text-xs text-gray-500 mt-1">
@@ -812,13 +818,16 @@ export function Item({
               ) : (
                 <div 
                   className="flex-grow"
-                  onClick={() => setIsEditing(true)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsEditing(true);
+                  }}
                 >
                   <div className="flex items-center gap-2">
                     <button
                       ref={dependencyButtonRef}
                       onClick={(e) => {
-                        e.stopPropagation() // Prevent triggering the parent's onClick
+                        e.stopPropagation();
                         setIsDependencyMenuOpen(!isDependencyMenuOpen)
                       }}
                       className="flex items-center justify-center hover:opacity-80 transition-opacity"
@@ -840,7 +849,7 @@ export function Item({
                       <div
                         ref={typeButtonRef}
                         onClick={(e) => {
-                          e.stopPropagation() // Prevent triggering the parent's onClick
+                          e.stopPropagation();
                           setIsTypeMenuOpen(!isTypeMenuOpen)
                         }} 
                         className={`
@@ -875,7 +884,10 @@ export function Item({
           <div className="flex items-center gap-2">
             <div className="flex gap-1">
               <button
-                onClick={() => onMoveItem(item.id, 'up')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveItem(item.id, 'up');
+                }}
                 disabled={itemPosition === 0}
                 className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
               >
@@ -884,7 +896,10 @@ export function Item({
                 </svg>
               </button>
               <button
-                onClick={() => onMoveItem(item.id, 'down')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveItem(item.id, 'down');
+                }}
                 disabled={itemPosition === siblingCount - 1}
                 className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
               >
@@ -895,7 +910,10 @@ export function Item({
             </div>
 
             <button
-              onClick={() => onAddChild(item.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddChild(item.id);
+              }}
               className="p-1 text-gray-500 hover:text-gray-700"
             >
               <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
@@ -904,7 +922,10 @@ export function Item({
             </button>
 
             <button
-              onClick={() => onFocus(item.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onFocus(item.id);
+              }}
               className="p-1 text-gray-500 hover:text-gray-700"
               title="Focus on this task"
             >
@@ -915,7 +936,10 @@ export function Item({
             </button>
 
             <button
-              onClick={() => setIsDeleteDialogOpen(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsDeleteDialogOpen(true);
+              }}
               className="p-1 text-gray-500 hover:text-red-600"
             >
               <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
