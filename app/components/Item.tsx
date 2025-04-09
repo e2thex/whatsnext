@@ -1,9 +1,11 @@
-import { type ReactNode, useCallback, useState, useRef, useEffect } from 'react'
+import { type ReactNode, useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useDrag } from 'react-dnd'
 import { type Database, type ItemType } from '../../src/lib/supabase/client'
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog'
 import { DependencySelectionDialog } from './DependencySelectionDialog'
+import { toast } from 'react-hot-toast'
+import { renderMarkdown } from '@/src/utils/markdown'
 
 type ItemRow = Database['public']['Tables']['items']['Row']
 type TaskDependencyRow = Database['public']['Tables']['task_dependencies']['Row']
@@ -118,12 +120,52 @@ export function Item({
     dateDependency ? new Date(dateDependency.unblock_at) : null
   )
   
+  // This works around the line ~92-93 where we use filterText
+  const [showDepSuggestions, setShowDepSuggestions] = useState(false)
+  const [depSuggestionPos, setDepSuggestionPos] = useState({ top: 0, left: 0 })
+  const [filterText, setFilterText] = useState('')
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0)
+  
   const contentInputRef = useRef<HTMLTextAreaElement>(null)
   const dependencyMenuRef = useRef<HTMLDivElement>(null)
   const dependencyButtonRef = useRef<HTMLButtonElement>(null)
   const typeMenuRef = useRef<HTMLDivElement>(null)
   const typeButtonRef = useRef<HTMLDivElement>(null)
+  const depSuggestionsRef = useRef<HTMLDivElement>(null)
 
+  // Add a console debug function
+  const logDebug = (message: string, data?: unknown) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Item ${item.id.slice(0, 4)}...] ${message}`, data);
+    }
+  };
+
+  // Add function to handle resizing the textarea
+  const handleTextareaResize = () => {
+    if (contentInputRef.current) {
+      // Reset height to auto to get the correct scrollHeight
+      contentInputRef.current.style.height = 'auto';
+      // Set the height to match the content (plus a small buffer)
+      contentInputRef.current.style.height = `${contentInputRef.current.scrollHeight + 2}px`;
+    }
+  };
+
+  // Format dependencies for editing - moved up before useEffect
+  const formatDependenciesForEditing = () => {
+    // Only include this for items with dependencies
+    if (blockedByTasks.length === 0) return '';
+    
+    // Format each dependency as @[TITLE](#ID)
+    const depLines = blockedByTasks.map(dep => {
+      const blockingTask = availableTasks?.find(t => t.id === dep.blocking_task_id);
+      if (!blockingTask) return '';
+      return `@[${blockingTask.title}](#${blockingTask.id})`;
+    }).filter(Boolean);
+    
+    // Join with spaces and return
+    return depLines.join(' ');
+  };
+  
   // Automatically focus content input for new/empty items
   useEffect(() => {
     if (item.title === '') {
@@ -131,14 +173,50 @@ export function Item({
     }
   }, [item.id, item.title]);
 
+  // Update content when starting to edit
   useEffect(() => {
-    if (isEditing && contentInputRef.current) {
-      contentInputRef.current.focus()
-      // Place cursor at the end of the content
-      const length = contentInputRef.current.value.length
-      contentInputRef.current.setSelectionRange(length, length)
+    if (isEditing) {
+      // Format content with dependencies
+      const depsFormatted = formatDependenciesForEditing();
+      const formattedContent = item.title +
+        (depsFormatted ? `\n${depsFormatted}` : '') +
+        (item.description ? `\n${item.description}` : '');
+      
+      setEditedContent(formattedContent);
+      
+      // Focus the textarea
+      setTimeout(() => {
+        if (contentInputRef.current) {
+          contentInputRef.current.focus();
+          // Place cursor at the end of the content
+          const length = contentInputRef.current.value.length;
+          contentInputRef.current.setSelectionRange(length, length);
+          
+          // Make sure the textarea is correctly sized
+          handleTextareaResize();
+        }
+      }, 10);
     }
-  }, [isEditing])
+  }, [isEditing, item.title, item.description, formatDependenciesForEditing, blockedByTasks, availableTasks]);
+
+  // Close dependency suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showDepSuggestions &&
+        depSuggestionsRef.current &&
+        !depSuggestionsRef.current.contains(event.target as Node) &&
+        !contentInputRef.current?.contains(event.target as Node)
+      ) {
+        setShowDepSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDepSuggestions]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -196,51 +274,259 @@ export function Item({
     }
   }, [isTypeMenuOpen])
 
+  // Parse content and extract dependencies
+  const parseContentAndDependencies = (content: string) => {
+    // Extract dependencies using regex
+    const depRegex = /@\[(.*?)\]\(#(.*?)\)/g;
+    const matches = Array.from(content.matchAll(depRegex));
+    
+    // Extract dependencies
+    const dependencies = matches.map(match => ({
+      title: match[1],
+      id: match[2]
+    }));
+    
+    // Remove dependency markup from content
+    const cleanContent = content.replace(depRegex, '').trim();
+    
+    return { cleanContent, dependencies };
+  };
+  
+  // Completely rewrite handleTextareaKeyDown for better handling
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Handle @ character to trigger suggestions
+    if (e.key === '@') {
+      logDebug('@ key pressed - showing suggestions');
+      e.preventDefault();
+      
+      // Get cursor position
+      const cursorPos = e.currentTarget.selectionStart || 0;
+      
+      // Insert @ manually
+      const newContent = 
+        editedContent.substring(0, cursorPos) + 
+        '@' + 
+        editedContent.substring(cursorPos);
+      
+      setEditedContent(newContent);
+      
+      // Need to delay showing suggestions until state updates
+      setTimeout(() => {
+        const newCursorPos = cursorPos + 1;
+        if (contentInputRef.current) {
+          contentInputRef.current.selectionStart = newCursorPos;
+          contentInputRef.current.selectionEnd = newCursorPos;
+          
+          // Get coordinates for dropdown - simpler approach
+          if (contentInputRef.current) {
+            const rect = contentInputRef.current.getBoundingClientRect();
+            const coords = { 
+              top: rect.bottom + window.scrollY + 5,  // 5px below textarea
+              left: rect.left + window.scrollX + 10   // 10px from left edge
+            };
+            
+            setDepSuggestionPos(coords);
+            setFilterText('');
+            setSelectedSuggestionIndex(0);
+            setShowDepSuggestions(true);
+            
+            logDebug('Showing suggestions at', coords);
+          }
+        }
+      }, 10);
+      
+      return;
+    }
+    
+    // Navigation in dropdown
+    if (showDepSuggestions) {
+      // Handle keyboard navigation in dropdown
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => 
+          Math.min(prev + 1, filteredTasks.length - 1)
+        );
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => Math.max(prev - 1, 0));
+      } else if (e.key === 'Enter' && filteredTasks.length > 0) {
+        e.preventDefault();
+        const selectedTask = filteredTasks[selectedSuggestionIndex];
+        if (selectedTask) {
+          insertDependency(selectedTask);
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowDepSuggestions(false);
+      }
+      
+      return;
+    }
+    
+    // Original handlers
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleContentSubmit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditedContent(item.description 
+        ? `${item.title}\n${item.description}` 
+        : item.title);
+      setIsEditing(false);
+      toast.success('Edit cancelled');
+    }
+  };
+
+  // Get cursor coordinates function - simplified approach without unused parameters
+  const getCursorCoordinates = (textarea: HTMLTextAreaElement) => {
+    // Get textarea dimensions and position
+    const rect = textarea.getBoundingClientRect();
+    
+    // Use a simpler approach - just position below the textarea
+    return { 
+      top: rect.bottom + window.scrollY + 5, // 5px below the textarea
+      left: rect.left + window.scrollX + 10 // 10px from the left edge
+    };
+  };
+
+  // Modify the handleTextareaChange function to match the updated getCursorCoordinates signature
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    const cursorPos = e.target.selectionStart || 0;
+    
+    setEditedContent(newValue);
+    
+    // Handle dependency suggestions
+    if (showDepSuggestions) {
+      // Get text before cursor
+      const textBeforeCursor = newValue.substring(0, cursorPos);
+      const lastAtPos = textBeforeCursor.lastIndexOf('@');
+      
+      if (lastAtPos >= 0) {
+        // Get filter text (text after last @)
+        const filterText = textBeforeCursor.substring(lastAtPos + 1);
+        logDebug('Filtering with', filterText);
+        
+        setFilterText(filterText);
+        setSelectedSuggestionIndex(0);
+        
+        // If we typed a space after @ without starting a tag, close suggestions
+        if (filterText.includes(' ') && !filterText.includes('[')) {
+          logDebug('Closing suggestions - space typed');
+          setShowDepSuggestions(false);
+        }
+      } else {
+        // No @ found, close suggestions
+        logDebug('Closing suggestions - no @ found');
+        setShowDepSuggestions(false);
+      }
+      
+      // Update position since text might have changed
+      if (contentInputRef.current) {
+        const coords = getCursorCoordinates(contentInputRef.current);
+        setDepSuggestionPos(coords);
+      }
+    }
+    
+    // Auto-resize the textarea
+    handleTextareaResize();
+  };
+  
+  // Update the filter for tasks
+  const filteredTasks = useMemo(() => {
+    return availableTasks
+      .filter(task => 
+        // Don't include current task
+        task.id !== item.id && 
+        // Only include tasks that match filter text
+        task.title.toLowerCase().includes(filterText.toLowerCase())
+      )
+      // Sort alphabetically
+      .sort((a, b) => a.title.localeCompare(b.title))
+      // Limit results
+      .slice(0, 10);
+  }, [availableTasks, item.id, filterText]);
+
+  // Use direct DOM insertion approach for dependency
+  const insertDependency = (task: ItemRow) => {
+    if (!contentInputRef.current) return;
+    
+    logDebug('Inserting dependency', task.title);
+    
+    const textarea = contentInputRef.current;
+    const cursorPos = textarea.selectionStart || 0;
+    const textBeforeCursor = editedContent.substring(0, cursorPos);
+    
+    // Find the last @ character
+    const lastAtPos = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtPos >= 0) {
+      // Format dependency
+      const depText = `@[${task.title}](#${task.id})`;
+      
+      // Replace everything from @ to cursor with the formatted dependency
+      const newContent = 
+        editedContent.substring(0, lastAtPos) + 
+        depText + 
+        editedContent.substring(cursorPos);
+      
+      setEditedContent(newContent);
+      
+      // Move cursor after insertion
+      setTimeout(() => {
+        if (textarea) {
+          const newCursorPos = lastAtPos + depText.length;
+          textarea.focus();
+          textarea.setSelectionRange(newCursorPos, newCursorPos);
+          
+          // Resize textarea
+          handleTextareaResize();
+        }
+      }, 10);
+    }
+    
+    // Close suggestions
+    setShowDepSuggestions(false);
+  };
+  
+  // Update the handleContentSubmit function to handle dependencies
   const handleContentSubmit = () => {
-    const contentLines = editedContent.split('\n')
-    const title = contentLines[0].trim()
-    const description = contentLines.slice(1).join('\n').trim()
+    // Parse content and extract dependencies
+    const { cleanContent, dependencies } = parseContentAndDependencies(editedContent);
+    
+    // Split content by lines
+    const contentLines = cleanContent.split('\n');
+    const title = contentLines[0].trim();
+    const description = contentLines.slice(1).join('\n').trim();
     
     if (title !== '') {
+      // Update the item
       onUpdateItem(item.id, { 
         title, 
         description: description || undefined 
-      })
-      setIsEditing(false)
+      });
+      
+      // Process dependencies - add new ones that don't exist
+      dependencies.forEach(dep => {
+        const existingDep = blockedByTasks.find(
+          blockDep => blockDep.blocking_task_id === dep.id
+        );
+        
+        if (!existingDep) {
+          // Add the new dependency
+          onAddDependency(dep.id, item.id);
+        }
+      });
+      
+      setIsEditing(false);
+      toast.success('Task updated successfully');
     } else {
-      // If the title is empty, use a default title
-      const defaultTitle = 'New Item'
-      setEditedContent(defaultTitle + (description ? `\n${description}` : ''))
-      onUpdateItem(item.id, { 
-        title: defaultTitle, 
-        description: description || undefined 
-      })
-      setIsEditing(false)
+      // Show validation error
+      toast.error('Task title cannot be empty');
+      // Keep focus in the editor
+      contentInputRef.current?.focus();
     }
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      // Enter without shift submits the edit
-      e.preventDefault()
-      handleContentSubmit()
-    } else if (e.key === 'Escape') {
-      // Escape cancels the edit
-      e.preventDefault()
-      setEditedContent(item.description 
-        ? `${item.title}\n${item.description}` 
-        : item.title)
-      setIsEditing(false)
-    }
-  }
-
-  // Automatically resize textarea to fit content
-  const handleTextareaResize = () => {
-    if (contentInputRef.current) {
-      contentInputRef.current.style.height = 'auto';
-      contentInputRef.current.style.height = `${contentInputRef.current.scrollHeight}px`;
-    }
-  }
+  };
 
   const [{ isDragging }, drag] = useDrag<DragItem, void, { isDragging: boolean }>({
     type: 'ITEM',
@@ -418,18 +704,66 @@ export function Item({
                   <textarea
                     ref={contentInputRef}
                     value={editedContent}
-                    onChange={(e) => {
-                      setEditedContent(e.target.value)
-                      handleTextareaResize()
-                    }}
+                    onChange={handleTextareaChange}
                     onBlur={handleContentSubmit}
-                    onKeyDown={handleKeyDown}
-                    className="w-full px-1 py-0.5 text-base font-medium border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none min-h-[60px]"
+                    onKeyDown={handleTextareaKeyDown}
+                    className="w-full px-1 py-0.5 text-base font-medium border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none min-h-[60px] bg-white text-gray-800"
                     rows={Math.max(2, editedContent.split('\n').length)}
-                    placeholder="Type title here (first line)&#10;Add details here (following lines)"
+                    placeholder="Type title here (first line)&#10;Add details here (following lines). Type @ to mention dependencies."
                     onInput={handleTextareaResize}
                   />
                   <div className="absolute inset-x-0 top-[24px] border-t border-gray-200 opacity-50 pointer-events-none" />
+                  <div className="text-xs text-gray-500 mt-1">
+                    First line: title, rest: description. Type @ to add dependencies. Supports markdown and links.
+                    <br />
+                    Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> to save, <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Esc</kbd> to cancel.
+                  </div>
+                  
+                  {/* Dependency suggestions dropdown - using portal to ensure it's directly in body */}
+                  {showDepSuggestions && typeof document !== 'undefined' && createPortal(
+                    <div 
+                      ref={depSuggestionsRef}
+                      style={{
+                        position: 'fixed',
+                        top: `${depSuggestionPos.top}px`,
+                        left: `${depSuggestionPos.left}px`,
+                      }}
+                      className="bg-white rounded-md shadow-xl border border-gray-300 max-h-64 overflow-y-auto z-[9999] w-72"
+                    >
+                      <div className="p-2">
+                        <div className="text-xs font-semibold text-gray-600 px-2 py-1 mb-1 border-b border-gray-200">
+                          Dependencies {filterText ? `matching "${filterText}"` : ''}
+                        </div>
+                        
+                        {filteredTasks.length > 0 ? (
+                          <div className="max-h-52 overflow-y-auto">
+                            {filteredTasks.map((task, index) => (
+                              <div
+                                key={task.id}
+                                onClick={() => insertDependency(task)}
+                                className={`
+                                  px-3 py-2 text-sm cursor-pointer flex items-center
+                                  ${index === selectedSuggestionIndex ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}
+                                `}
+                              >
+                                <span className="mr-1.5 font-bold text-indigo-500">@</span>
+                                <span className="truncate">{task.title}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="px-3 py-2 text-sm text-gray-500">
+                            {filterText ? 'No matching tasks found' : 'Type to search for tasks'}
+                          </div>
+                        )}
+                        
+                        <div className="text-xs text-gray-500 mt-1 px-2 pt-1 border-t border-gray-100">
+                          Use ↑↓ to navigate, Enter to select
+                        </div>
+                      </div>
+                    </div>,
+                    document.body
+                  )}
                 </div>
               ) : (
                 <div 
@@ -483,9 +817,11 @@ export function Item({
                     </div>
                   </div>
                   {displayDescription && (
-                    <p className="mt-1 text-sm text-gray-600 cursor-text hover:text-gray-700 whitespace-pre-wrap break-words">
-                      {highlightMatchingText(displayDescription, searchQuery.trim())}
-                    </p>
+                    <div 
+                      className="mt-1 text-sm text-gray-600 cursor-text hover:text-gray-700 whitespace-pre-wrap break-words markdown-content"
+                    >
+                      {renderMarkdown(highlightMatchingText(displayDescription, searchQuery.trim()) as string)}
+                    </div>
                   )}
                 </div>
               )}
@@ -796,7 +1132,7 @@ export function Item({
         onClose={() => setIsDependencySelectionOpen(false)}
         onSelect={(taskId) => onAddDependency(taskId, item.id)}
         currentTaskId={item.id}
-        availableTasks={availableTasks}
+        availableTasks={filteredTasks}
       />
     </div>
   )
