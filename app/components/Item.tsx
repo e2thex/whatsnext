@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useState, useRef, useEffect, useMemo, Children, isValidElement } from 'react'
+import { type ReactNode, useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useDrag } from 'react-dnd'
 import { type Database, type ItemType } from '../../src/lib/supabase/client'
@@ -24,6 +24,8 @@ interface ItemProps {
   onRemoveDependency: (blockingTaskId: string, blockedTaskId: string) => void
   onAddDateDependency: (taskId: string, unblockAt: Date) => void
   onRemoveDateDependency: (taskId: string) => void
+  onCreateSubtask?: (parentId: string, title: string) => void
+  onReorderSubtasks?: (parentId: string, subtaskIds: string[]) => void
   siblingCount: number
   itemPosition: number
   children?: ReactNode
@@ -91,6 +93,8 @@ export function Item({
   onRemoveDependency,
   onAddDateDependency,
   onRemoveDateDependency,
+  onCreateSubtask,
+  onReorderSubtasks,
   siblingCount,
   itemPosition,
   children,
@@ -335,6 +339,47 @@ export function Item({
     
     return { cleanContent, dependencies };
   };
+
+  // Add a new function to parse content and extract subtasks
+  const parseContentAndSubtasks = (content: string) => {
+    // First split content into lines
+    const lines = content.split('\n');
+    
+    // Regular expressions for identifying subtask items
+    const existingSubtaskRegex = /^-\s*\[(.*?)\]\(#(.*?)\)$/;
+    const newSubtaskRegex = /^-\s+(.+)$/;
+    
+    // Arrays to store results
+    const contentLines: string[] = [];
+    const existingSubtasks: { id: string, title: string, position: number }[] = [];
+    const newSubtasks: string[] = [];
+    
+    // Process each line
+    lines.forEach(line => {
+      const existingMatch = line.match(existingSubtaskRegex);
+      const newMatch = line.match(newSubtaskRegex);
+      
+      if (existingMatch) {
+        // This is an existing subtask
+        existingSubtasks.push({
+          id: existingMatch[2],
+          title: existingMatch[1],
+          position: existingSubtasks.length
+        });
+      } else if (newMatch) {
+        // This is a new subtask to create
+        newSubtasks.push(newMatch[1].trim());
+      } else {
+        // This is regular content
+        contentLines.push(line);
+      }
+    });
+    
+    // Join the content lines back together
+    const cleanContent = contentLines.join('\n').trim();
+    
+    return { cleanContent, existingSubtasks, newSubtasks };
+  };
   
   // Completely rewrite handleTextareaKeyDown for better handling
   const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -533,17 +578,22 @@ export function Item({
     setShowDepSuggestions(false);
   };
   
-  // Update the handleContentSubmit function to handle dependencies
+  // Update the handleContentSubmit function to handle dependencies and subtasks
   const handleContentSubmit = () => {
     // Parse content and extract dependencies
-    const { cleanContent, dependencies } = parseContentAndDependencies(editedContent);
+    const { cleanContent: contentWithoutDeps, dependencies } = parseContentAndDependencies(editedContent);
     
-    // Split content by lines
+    // Now parse the remaining content for subtasks
+    const { cleanContent, existingSubtasks, newSubtasks } = parseContentAndSubtasks(contentWithoutDeps);
+    
+    // Split content by lines (after removing subtasks)
     const contentLines = cleanContent.split('\n');
     const title = contentLines[0].trim();
     const description = contentLines.slice(1).join('\n').trim();
     
     if (title !== '') {
+      logDebug('Submitting content', { title, description, existingSubtasks, newSubtasks });
+      
       // Update the item
       onUpdateItem(item.id, { 
         title, 
@@ -561,6 +611,20 @@ export function Item({
           onAddDependency(dep.id, item.id);
         }
       });
+      
+      // Handle new subtasks if the handler is provided
+      if (onCreateSubtask && newSubtasks.length > 0) {
+        newSubtasks.forEach(subtaskTitle => {
+          onCreateSubtask(item.id, subtaskTitle);
+        });
+      }
+      
+      // Handle reordering of existing subtasks if the handler is provided
+      if (onReorderSubtasks && existingSubtasks.length > 0) {
+        // Extract the IDs in the new order
+        const orderedIds = existingSubtasks.map(subtask => subtask.id);
+        onReorderSubtasks(item.id, orderedIds);
+      }
       
       setIsEditing(false);
       toast.success('Task updated successfully');

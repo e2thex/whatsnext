@@ -90,12 +90,15 @@ export interface ItemListProps {
   onRemoveDependency: (blockingTaskId: string, blockedTaskId: string) => void
   onAddDateDependency: (taskId: string, unblockAt: Date) => void
   onRemoveDateDependency: (taskId: string) => void
+  createSubtask: (parentId: string, title: string) => void
+  reorderSubtasks: (parentId: string, subtaskIds: string[]) => void
   focusedItemId: string | null
   viewMode: 'tree' | 'list'
   showOnlyActionable: boolean
   showOnlyBlocked: boolean
   completionFilter: 'all' | 'completed' | 'not-completed'
   searchQuery: string
+  childCount?: Record<string, number>
 }
 
 export function ItemList({ 
@@ -114,12 +117,15 @@ export function ItemList({
   onRemoveDependency,
   onAddDateDependency,
   onRemoveDateDependency,
+  createSubtask,
+  reorderSubtasks,
   focusedItemId,
   viewMode,
   showOnlyActionable,
   showOnlyBlocked,
   completionFilter,
-  searchQuery
+  searchQuery,
+  childCount = {}
 }: ItemListProps) {
   const itemsByParent = useMemo(() => {
     const map = new Map<string | null, ItemRow[]>()
@@ -320,6 +326,8 @@ export function ItemList({
             onRemoveDependency={onRemoveDependency}
             onAddDateDependency={onAddDateDependency}
             onRemoveDateDependency={onRemoveDateDependency}
+            onCreateSubtask={createSubtask}
+            onReorderSubtasks={reorderSubtasks}
             siblingCount={childItems.length}
             itemPosition={index}
             hasChildren={hasChildren}
@@ -518,6 +526,8 @@ export function ItemList({
                   onRemoveDependency={onRemoveDependency}
                   onAddDateDependency={onAddDateDependency}
                   onRemoveDateDependency={onRemoveDateDependency}
+                  onCreateSubtask={createSubtask}
+                  onReorderSubtasks={reorderSubtasks}
                   siblingCount={1}
                   itemPosition={0}
                   hasChildren={false}
@@ -595,6 +605,8 @@ export function ItemList({
                       onRemoveDependency={onRemoveDependency}
                       onAddDateDependency={onAddDateDependency}
                       onRemoveDateDependency={onRemoveDateDependency}
+                      onCreateSubtask={createSubtask}
+                      onReorderSubtasks={reorderSubtasks}
                       siblingCount={childItems.length}
                       itemPosition={0}
                       hasChildren={hasChildren}

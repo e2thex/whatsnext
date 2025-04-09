@@ -6,6 +6,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend'
 import { ItemList } from './components/ItemList'
 import { Toolbar } from './components/Toolbar'
 import { supabase, type Database, type ItemType } from '../src/lib/supabase/client'
+import { toast } from 'react-hot-toast'
 
 type Item = Database['public']['Tables']['items']['Row']
 type TaskDependency = Database['public']['Tables']['task_dependencies']['Row']
@@ -24,6 +25,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [showOnlyActionable, setShowOnlyActionable] = useState(false)
   const [showOnlyBlocked, setShowOnlyBlocked] = useState(false)
+  const [childCount, setChildCount] = useState<Record<string, number>>({})
 
   useEffect(() => {
     const fetchUserAndData = async () => {
@@ -702,6 +704,97 @@ export default function Home() {
     }
   }
 
+  const createSubtask = async (parentId: string, title: string) => {
+    try {
+      if (!userId) {
+        throw new Error('No user logged in')
+      }
+      
+      // Get the number of existing children for positioning
+      const siblings = items.filter(item => item.parent_id === parentId);
+      const maxPosition = siblings.length > 0 
+        ? Math.max(...siblings.map(s => s.position)) + 1 
+        : 0;
+      
+      // Create a new item as a subtask
+      const { data: newItem, error } = await supabase
+        .from('items')
+        .insert({
+          title,
+          parent_id: parentId,
+          position: maxPosition,
+          completed: false,
+          user_id: userId,
+          manual_type: false
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Update the local state
+      setItems(prev => [...prev, newItem]);
+      
+      // Update child count tracking
+      setChildCount(prev => ({
+        ...prev,
+        [parentId]: (prev[parentId] || 0) + 1
+      }));
+      
+      toast.success('Subtask created successfully');
+    } catch (error) {
+      console.error('Error creating subtask:', error);
+      toast.error('Failed to create subtask');
+    }
+  };
+
+  const reorderSubtasks = async (parentId: string, subtaskIds: string[]) => {
+    try {
+      if (!userId) {
+        throw new Error('No user logged in')
+      }
+      
+      // First, get all the items that need to be updated to preserve their data
+      const itemsToUpdate = items.filter(item => subtaskIds.includes(item.id));
+      
+      // Create an array of updates with all required fields preserved
+      const updates = subtaskIds.map((id, index) => {
+        const item = itemsToUpdate.find(i => i.id === id);
+        
+        if (!item) {
+          throw new Error(`Item with ID ${id} not found`);
+        }
+        
+        // Return the full item with only the position updated
+        return {
+          ...item,
+          position: index
+        };
+      });
+      
+      // Update all positions at once
+      const { error } = await supabase
+        .from('items')
+        .upsert(updates);
+      
+      if (error) throw error;
+      
+      // Update local state to reflect the new order
+      setItems(prev => prev.map(item => {
+        const newIndex = subtaskIds.indexOf(item.id);
+        if (newIndex !== -1) {
+          return { ...item, position: newIndex };
+        }
+        return item;
+      }));
+      
+      toast.success('Subtasks reordered successfully');
+    } catch (error) {
+      console.error('Error reordering subtasks:', error);
+      toast.error('Failed to reorder subtasks');
+    }
+  };
+
   if (isLoading) {
     return <div>Loading...</div>
   }
@@ -744,12 +837,15 @@ export default function Home() {
             onRemoveDependency={handleRemoveDependency}
             onAddDateDependency={handleAddDateDependency}
             onRemoveDateDependency={handleRemoveDateDependency}
+            createSubtask={createSubtask}
+            reorderSubtasks={reorderSubtasks}
             focusedItemId={focusedItemId}
             viewMode={viewMode}
             showOnlyActionable={showOnlyActionable}
             showOnlyBlocked={showOnlyBlocked}
             completionFilter={completionFilter}
             searchQuery={searchQuery}
+            childCount={childCount}
           />
         </div>
       </main>
