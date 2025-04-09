@@ -853,6 +853,88 @@ export default function Home() {
     }
   };
 
+  // Add handleChangeParent function between other handler functions
+  const handleChangeParent = async (itemId: string, newParentId: string | null) => {
+    try {
+      if (!userId) {
+        throw new Error('No user logged in')
+      }
+
+      const item = items.find(i => i.id === itemId)
+      if (!item) return
+
+      // If parent isn't changing, do nothing
+      if (item.parent_id === newParentId) return
+
+      // Update parent_id in database
+      const { error: updateError } = await supabase
+        .from('items')
+        .update({ 
+          parent_id: newParentId,
+          // New items are added at the end of their parent group
+          position: newParentId ? 
+            (items.filter(i => i.parent_id === newParentId).length) : 
+            (items.filter(i => i.parent_id === null).length)
+        })
+        .eq('id', itemId)
+        .eq('user_id', userId)
+
+      if (updateError) throw updateError
+
+      // Update positions of siblings in both old and new parent groups
+      const oldSiblings = items.filter(i => i.parent_id === item.parent_id && i.id !== itemId)
+      
+      // Reorder old siblings
+      if (oldSiblings.length > 0) {
+        const oldUpdates = oldSiblings.map((sibling, index) => ({
+          ...sibling,
+          position: index
+        }))
+
+        const { error: batchError } = await supabase
+          .from('items')
+          .upsert(oldUpdates)
+          .eq('user_id', userId)
+
+        if (batchError) throw batchError
+      }
+
+      // Update local state
+      setItems(prev => {
+        const updated = [...prev]
+        const itemIndex = updated.findIndex(i => i.id === itemId)
+        
+        if (itemIndex !== -1) {
+          // Update the moved item with new parent
+          updated[itemIndex] = { 
+            ...updated[itemIndex], 
+            parent_id: newParentId,
+            position: newParentId ? 
+              items.filter(i => i.parent_id === newParentId).length : 
+              items.filter(i => i.parent_id === null).length
+          }
+          
+          // Update positions of old siblings
+          oldSiblings.forEach((sibling, index) => {
+            const siblingIndex = updated.findIndex(i => i.id === sibling.id)
+            if (siblingIndex !== -1) {
+              updated[siblingIndex] = { ...updated[siblingIndex], position: index }
+            }
+          })
+        }
+        
+        return updated
+      })
+
+      setError(null)
+      toast.success('Item moved successfully')
+    } catch (error) {
+      console.error('Error changing parent:', error)
+      setError(error instanceof Error ? error.message : 'Failed to change parent')
+      toast.error('Failed to move item')
+    }
+  }
+
   if (isLoading) {
     return <div>Loading...</div>
   }
@@ -897,6 +979,8 @@ export default function Home() {
             onRemoveDateDependency={handleRemoveDateDependency}
             createSubtask={createSubtask}
             reorderSubtasks={reorderSubtasks}
+            onUpdateSubtask={updateSubtask}
+            onChangeParent={handleChangeParent}
             focusedItemId={focusedItemId}
             viewMode={viewMode}
             showOnlyActionable={showOnlyActionable}
@@ -904,7 +988,6 @@ export default function Home() {
             completionFilter={completionFilter}
             searchQuery={searchQuery}
             childCount={childCount}
-            onUpdateSubtask={updateSubtask}
           />
         </div>
       </main>

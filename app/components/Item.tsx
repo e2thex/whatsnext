@@ -28,6 +28,7 @@ interface ItemProps {
   onUpdateSubtask?: (subtaskId: string, updates: { title: string; position: number }) => void
   onReorderSubtasks?: (parentId: string, subtaskIds: string[]) => void
   onEditingChange?: (isEditing: boolean) => void
+  onChangeParent?: (itemId: string, newParentId: string | null) => void
   siblingCount: number
   itemPosition: number
   children?: ReactNode
@@ -98,6 +99,7 @@ export function Item({
   onCreateSubtask,
   onUpdateSubtask,
   onEditingChange,
+  onChangeParent,
   siblingCount,
   itemPosition,
   children,
@@ -158,6 +160,13 @@ export function Item({
     dependencies: { id: string, title: string }[];
     subtasksToProcess?: { id?: string, title: string, position: number }[];
   } | null>(null);
+
+  // Add state for parent suggestions
+  const [showParentSuggestions, setShowParentSuggestions] = useState(false)
+  const [parentSuggestionPos, setParentSuggestionPos] = useState({ top: 0, left: 0 })
+  const [parentFilterText, setParentFilterText] = useState('')
+  const [selectedParentIndex, setSelectedParentIndex] = useState(0)
+  const parentSuggestionsRef = useRef<HTMLDivElement>(null)
 
   // Add a useEffect to initialize currentChildItems when we start editing
   useEffect(() => {
@@ -233,11 +242,13 @@ export function Item({
   // Update content when starting to edit
   useEffect(() => {
     if (isEditing) {
-      // Format content with dependencies and child items
+      // Format content with dependencies, parent and child items
       const depsFormatted = formatDependenciesForEditing();
+      const parentFormatted = formatParentForEditing();
       const childrenFormatted = formatChildItemsForEditing();
       
       const formattedContent = item.title +
+        (parentFormatted ? `\n${parentFormatted}` : '') +
         (depsFormatted ? `\n${depsFormatted}` : '') +
         (item.description ? `\n${item.description}` : '') +
         (childrenFormatted ? `\n\n${childrenFormatted}` : '');
@@ -352,8 +363,24 @@ export function Item({
     return { cleanContent, dependencies };
   };
 
-  // Parse content and extract subtasks
-  
+  // Parse content and extract parent
+  const parseContentAndParent = (content: string) => {
+    // Extract parent using regex
+    const parentRegex = /\^(?:\[(.*?)\]\(#(.*?)\))/;
+    const match = content.match(parentRegex);
+    
+    // Extract parent if found
+    const parent = match ? {
+      title: match[1],
+      id: match[2]
+    } : null;
+    
+    // Remove parent markup from content
+    const cleanContent = content.replace(parentRegex, '').trim();
+    
+    return { cleanContent, parent };
+  };
+
   // Get cursor coordinates function - simplified approach without unused parameters
   const getCursorCoordinates = (textarea: HTMLTextAreaElement) => {
     // Get textarea dimensions and position
@@ -373,8 +400,105 @@ export function Item({
     }
   };
 
+  // Add a simple debug function for tracing the parent dropdown
+  const debugParent = (message: string) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[^Parent] ${message}`);
+    }
+  };
+
+  // Format parent for editing if it exists
+  const formatParentForEditing = () => {
+    if (!item.parent_id) return '';
+    
+    const parentItem = availableTasks?.find(t => t.id === item.parent_id);
+    if (!parentItem) return '';
+    
+    return `^[${parentItem.title}](#${parentItem.id})`;
+  };
+
+  // Add useEffect for handling clicks outside the parent suggestions dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showParentSuggestions &&
+        parentSuggestionsRef.current &&
+        !parentSuggestionsRef.current.contains(event.target as Node) &&
+        !contentInputRef.current?.contains(event.target as Node)
+      ) {
+        setShowParentSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showParentSuggestions]);
+
   // Completely rewrite handleTextareaKeyDown for better handling
   const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Handle ^ character to trigger parent suggestions
+    if (e.key === '^') {
+      debugParent('^ key pressed - showing suggestions');
+      e.preventDefault();
+      
+      // Get cursor position
+      const cursorPos = e.currentTarget.selectionStart || 0;
+      
+      // Insert ^ manually
+      const newContent = 
+        editedContent.substring(0, cursorPos) + 
+        '^' + 
+        editedContent.substring(cursorPos);
+      
+      setEditedContent(newContent);
+      
+      // Need to delay showing suggestions until state updates
+      setTimeout(() => {
+        const newCursorPos = cursorPos + 1;
+        if (contentInputRef.current) {
+          contentInputRef.current.selectionStart = newCursorPos;
+          contentInputRef.current.selectionEnd = newCursorPos;
+          
+          // Get coordinates for dropdown - using our utility function
+          const coords = getCursorCoordinates(contentInputRef.current);
+          debugParent(`Showing dropdown at ${coords.top}, ${coords.left}`);
+          setParentSuggestionPos(coords);
+          setParentFilterText('');
+          setSelectedParentIndex(0);
+          setShowParentSuggestions(true);
+        }
+      }, 10);
+      
+      return;
+    }
+    
+    // Navigation in parent dropdown
+    if (showParentSuggestions) {
+      // Handle keyboard navigation in dropdown
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedParentIndex(prev => 
+          Math.min(prev + 1, filteredParentTasks.length - 1)
+        );
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedParentIndex(prev => Math.max(prev - 1, 0));
+      } else if (e.key === 'Enter' && filteredParentTasks.length > 0) {
+        e.preventDefault();
+        const selectedTask = filteredParentTasks[selectedParentIndex];
+        if (selectedTask) {
+          insertParent(selectedTask);
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowParentSuggestions(false);
+      }
+      
+      return;
+    }
+    
     // Handle @ character to trigger suggestions
     if (e.key === '@') {
       debugDependency('@ key pressed - showing suggestions');
@@ -411,7 +535,7 @@ export function Item({
       return;
     }
     
-    // Navigation in dropdown
+    // Navigation in dependency dropdown
     if (showDepSuggestions) {
       // Handle keyboard navigation in dropdown
       if (e.key === 'ArrowDown') {
@@ -450,12 +574,41 @@ export function Item({
     }
   };
 
-  // Modify the handleTextareaChange function to match the updated getCursorCoordinates signature
+  // Modify handleTextareaChange to handle parent suggestions
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     const cursorPos = e.target.selectionStart || 0;
     
     setEditedContent(newValue);
+    
+    // Handle parent suggestions
+    if (showParentSuggestions) {
+      // Get text before cursor
+      const textBeforeCursor = newValue.substring(0, cursorPos);
+      const lastCaretPos = textBeforeCursor.lastIndexOf('^');
+      
+      if (lastCaretPos >= 0) {
+        // Get filter text (text after last ^)
+        const filterText = textBeforeCursor.substring(lastCaretPos + 1);
+        
+        setParentFilterText(filterText);
+        setSelectedParentIndex(0);
+        
+        // If we typed a space after ^ without starting a tag, close suggestions
+        if (filterText.includes(' ') && !filterText.includes('[')) {
+          setShowParentSuggestions(false);
+        }
+      } else {
+        // No ^ found, close suggestions
+        setShowParentSuggestions(false);
+      }
+      
+      // Update position since text might have changed
+      if (contentInputRef.current) {
+        const coords = getCursorCoordinates(contentInputRef.current);
+        setParentSuggestionPos(coords);
+      }
+    }
     
     // Handle dependency suggestions
     if (showDepSuggestions) {
@@ -505,6 +658,22 @@ export function Item({
       .slice(0, 10);
   }, [availableTasks, item.id, filterText]);
 
+  // Create filteredParentTasks for parent suggestions
+  const filteredParentTasks = useMemo(() => {
+    return availableTasks
+      .filter(task => 
+        // Don't include current task or its descendants (to avoid circular references)
+        task.id !== item.id && 
+        !task.parent_id || (task.parent_id && task.parent_id !== item.id) &&
+        // Only include tasks that match filter text
+        task.title.toLowerCase().includes(parentFilterText.toLowerCase())
+      )
+      // Sort alphabetically
+      .sort((a, b) => a.title.localeCompare(b.title))
+      // Limit results
+      .slice(0, 10);
+  }, [availableTasks, item.id, parentFilterText]);
+
   // Use direct DOM insertion approach for dependency
   const insertDependency = (task: ItemRow) => {
     if (!contentInputRef.current) return;
@@ -544,7 +713,47 @@ export function Item({
     // Close suggestions
     setShowDepSuggestions(false);
   };
-  
+
+  // Add function to insert parent
+  const insertParent = (task: ItemRow) => {
+    if (!contentInputRef.current) return;
+    
+    const textarea = contentInputRef.current;
+    const cursorPos = textarea.selectionStart || 0;
+    const textBeforeCursor = editedContent.substring(0, cursorPos);
+    
+    // Find the last ^ character
+    const lastCaretPos = textBeforeCursor.lastIndexOf('^');
+    
+    if (lastCaretPos >= 0) {
+      // Format parent
+      const parentText = `^[${task.title}](#${task.id})`;
+      
+      // Replace everything from ^ to cursor with the formatted parent
+      const newContent = 
+        editedContent.substring(0, lastCaretPos) + 
+        parentText + 
+        editedContent.substring(cursorPos);
+      
+      setEditedContent(newContent);
+      
+      // Move cursor after insertion
+      setTimeout(() => {
+        if (textarea) {
+          const newCursorPos = lastCaretPos + parentText.length;
+          textarea.focus();
+          textarea.setSelectionRange(newCursorPos, newCursorPos);
+          
+          // Resize textarea
+          handleTextareaResize();
+        }
+      }, 10);
+    }
+    
+    // Close suggestions
+    setShowParentSuggestions(false);
+  };
+
   // Now modify the handleContentSubmit function with a simpler, more functional approach
   const handleContentSubmit = () => {
     // If we're in the process of deleting subtasks, don't proceed with the normal save flow
@@ -552,8 +761,9 @@ export function Item({
       return;
     }
     
-    // Parse content and extract dependencies
-    const { cleanContent: contentWithoutDeps, dependencies } = parseContentAndDependencies(editedContent);
+    // Parse content and extract dependencies and parent
+    const { cleanContent: contentWithoutParent, parent } = parseContentAndParent(editedContent);
+    const { cleanContent: contentWithoutDeps, dependencies } = parseContentAndDependencies(contentWithoutParent);
     
     // Split content by lines
     const contentLines = contentWithoutDeps.split('\n');
@@ -565,6 +775,14 @@ export function Item({
       toast.error('Task title cannot be empty');
       contentInputRef.current?.focus();
       return;
+    }
+    
+    // Apply parent change if it has changed
+    if (parent && onChangeParent && parent.id !== item.parent_id) {
+      onChangeParent(item.id, parent.id);
+    } else if (!parent && item.parent_id && onChangeParent) {
+      // If parent was removed, set to null
+      onChangeParent(item.id, null);
     }
     
     // STEP 1: Get current subtasks from database
@@ -1414,6 +1632,53 @@ export function Item({
           itemTitle={deletedSubtasksQueue.find(s => s.id === deletingSubtaskId)?.title || 'Unknown Subtask'}
           childCount={availableTasks.filter(task => task.parent_id === deletingSubtaskId).length}
         />
+      )}
+
+      {/* Parent suggestions dropdown */}
+      {showParentSuggestions && typeof document !== 'undefined' && createPortal(
+        <div 
+          ref={parentSuggestionsRef}
+          style={{
+            position: 'fixed',
+            top: `${parentSuggestionPos.top}px`,
+            left: `${parentSuggestionPos.left}px`,
+            zIndex: 9999
+          }}
+          className="bg-white rounded-md shadow-xl border border-gray-300 max-h-64 overflow-y-auto w-72"
+        >
+          <div className="p-2">
+            <div className="text-xs font-semibold text-gray-600 px-2 py-1 mb-1 border-b border-gray-200">
+              Set as parent {parentFilterText ? `matching "${parentFilterText}"` : ''}
+            </div>
+            
+            {filteredParentTasks.length > 0 ? (
+              <div className="max-h-52 overflow-y-auto">
+                {filteredParentTasks.map((task, index) => (
+                  <div
+                    key={task.id}
+                    onClick={() => insertParent(task)}
+                    className={`
+                      px-3 py-2 text-sm cursor-pointer flex items-center
+                      ${index === selectedParentIndex ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}
+                    `}
+                  >
+                    <span className="mr-1.5 font-bold text-indigo-500">^</span>
+                    <span className="truncate">{task.title}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="px-3 py-2 text-sm text-gray-500">
+                {parentFilterText ? 'No matching tasks found' : 'Type to search for tasks'}
+              </div>
+            )}
+            
+            <div className="text-xs text-gray-500 mt-1 px-2 pt-1 border-t border-gray-100">
+              Use ↑↓ to navigate, Enter to select
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )

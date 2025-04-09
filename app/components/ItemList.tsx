@@ -93,6 +93,7 @@ export interface ItemListProps {
   onRemoveDateDependency: (taskId: string) => void
   createSubtask: (parentId: string, title: string, position: number) => void
   reorderSubtasks: (parentId: string, subtaskIds: string[]) => void
+  onChangeParent?: (itemId: string, newParentId: string | null) => void
   focusedItemId: string | null
   viewMode: 'tree' | 'list'
   showOnlyActionable: boolean
@@ -121,6 +122,7 @@ export function ItemList({
   onRemoveDateDependency,
   createSubtask,
   reorderSubtasks,
+  onChangeParent,
   focusedItemId,
   viewMode,
   showOnlyActionable,
@@ -335,6 +337,7 @@ export function ItemList({
             onUpdateSubtask={onUpdateSubtask}
             onReorderSubtasks={reorderSubtasks}
             onEditingChange={(isEditing) => setIsAnyItemEditing(isEditing)}
+            onChangeParent={onChangeParent}
             siblingCount={childItems.length}
             itemPosition={index}
             hasChildren={hasChildren}
@@ -512,7 +515,7 @@ export function ItemList({
           />
         )}
         
-        {filteredTasks.map((task) => {
+        {filteredTasks.map((task, index) => {
           // Show breadcrumbs if we're at root level or if we're focused and this task is deeper than the focused item
           const breadcrumbs = !focusedItemId || searchQuery.trim()
             ? getItemAncestry(task.id).slice(0, -1) // Show full ancestry except the task itself when at root or searching
@@ -540,8 +543,9 @@ export function ItemList({
                   onUpdateSubtask={onUpdateSubtask}
                   onReorderSubtasks={reorderSubtasks}
                   onEditingChange={(isEditing) => setIsAnyItemEditing(isEditing)}
+                  onChangeParent={onChangeParent}
                   siblingCount={1}
-                  itemPosition={0}
+                  itemPosition={index}
                   hasChildren={false}
                   childCount={0}
                   blockingTasks={dependenciesByTask.blocking.get(task.id) || []}
@@ -622,6 +626,7 @@ export function ItemList({
                       onUpdateSubtask={onUpdateSubtask}
                       onReorderSubtasks={reorderSubtasks}
                       onEditingChange={(isEditing) => setIsAnyItemEditing(isEditing)}
+                      onChangeParent={onChangeParent}
                       siblingCount={childItems.length}
                       itemPosition={0}
                       hasChildren={hasChildren}
