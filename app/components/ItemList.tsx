@@ -90,7 +90,7 @@ export interface ItemListProps {
   onRemoveDependency: (blockingTaskId: string, blockedTaskId: string) => void
   onAddDateDependency: (taskId: string, unblockAt: Date) => void
   onRemoveDateDependency: (taskId: string) => void
-  createSubtask: (parentId: string, title: string) => void
+  createSubtask: (parentId: string, title: string, position: number) => void
   reorderSubtasks: (parentId: string, subtaskIds: string[]) => void
   focusedItemId: string | null
   viewMode: 'tree' | 'list'
@@ -126,7 +126,6 @@ export function ItemList({
   showOnlyBlocked,
   completionFilter,
   searchQuery,
-  childCount = {},
   onUpdateSubtask
 }: ItemListProps) {
   const itemsByParent = useMemo(() => {

@@ -25,7 +25,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [showOnlyActionable, setShowOnlyActionable] = useState(false)
   const [showOnlyBlocked, setShowOnlyBlocked] = useState(false)
-  const [childCount, setChildCount] = useState<Record<string, number>>({})
+  const [childCount] = useState<Record<string, number>>({})
 
   useEffect(() => {
     const fetchUserAndData = async () => {
@@ -771,7 +771,7 @@ export default function Home() {
       }
       
       toast.success('Subtask created');
-    } catch (error) {
+    } catch {
       toast.error('Failed to create subtask');
     }
   };
@@ -817,7 +817,7 @@ export default function Home() {
       }));
       
       toast.success('Subtasks reordered successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to reorder subtasks');
     }
   };
@@ -848,7 +848,7 @@ export default function Home() {
       );
       
       toast.success('Subtask updated');
-    } catch (err) {
+    } catch {
       toast.error('Failed to update subtask');
     }
   };

@@ -96,7 +96,6 @@ export function Item({
   onRemoveDateDependency,
   onCreateSubtask,
   onUpdateSubtask,
-  onReorderSubtasks,
   siblingCount,
   itemPosition,
   children,
@@ -141,7 +140,8 @@ export function Item({
 
   // First add a new state variable to track subtasks pending deletion
   const [deletingSubtaskId, setDeletingSubtaskId] = useState<string | null>(null);
-  const [currentChildItems, setCurrentChildItems] = useState<ItemRow[]>([]);
+  // Use only the setter if that's all we need
+  const [, setCurrentChildItems] = useState<ItemRow[]>([]);
   // Add a state to track all deleted subtasks and their metadata for consistent display
   const [deletedSubtasksQueue, setDeletedSubtasksQueue] = useState<{ id: string, title: string }[]>([]);
   // Track if we're in the process of deleting subtasks to prevent new creation
@@ -351,102 +351,6 @@ export function Item({
   };
 
   // Parse content and extract subtasks
-  const parseContentAndSubtasks = (content: string) => {
-    // First split content into lines
-    const lines = content.split('\n');
-    
-    // Regular expressions for identifying subtask items
-    const existingSubtaskRegex = /^-\s*\[(.*?)\]\(#(.*?)\)$/;
-    const newSubtaskRegex = /^-\s+(.+)$/;
-    
-    // Arrays to store results
-    const contentLines: string[] = [];
-    const existingSubtasks: { id: string, title: string, position: number }[] = [];
-    const newSubtasks: { title: string, position: number }[] = [];
-    
-    // Track current subtasks from database
-    const currentSubtasks = currentChildItems.map(item => ({
-      id: item.id,
-      title: item.title,
-      stillExists: false // Flag to track if this subtask still exists in the content
-    }));
-    
-    // Keep track of all subtasks (both existing and new) to determine final positions
-    const allSubtasks: { id?: string, title: string, isNew: boolean, originalIndex: number }[] = [];
-    
-    // Process each line
-    lines.forEach((line, index) => {
-      const existingMatch = line.match(existingSubtaskRegex);
-      const newMatch = line.match(newSubtaskRegex);
-      
-      if (existingMatch) {
-        // This is an existing subtask
-        const id = existingMatch[2];
-        const title = existingMatch[1];
-        
-        // Mark this subtask as still existing
-        const currentSubtask = currentSubtasks.find(s => s.id === id);
-        if (currentSubtask) {
-          currentSubtask.stillExists = true;
-        }
-        
-        allSubtasks.push({
-          id,
-          title,
-          isNew: false,
-          originalIndex: index
-        });
-      } else if (newMatch && !isProcessingDeletion) {
-        // This is a new subtask to create - but ONLY if we're not in deletion mode
-        const title = newMatch[1].trim();
-        
-        // Check if this might be a "recreated" subtask that was previously deleted
-        // If so, we'll ignore it to prevent incorrect recreation during deletion
-        const matchesDeletedSubtask = currentSubtasks.some(s => 
-          !s.stillExists && s.title.toLowerCase() === title.toLowerCase());
-        
-        if (!matchesDeletedSubtask) {
-          allSubtasks.push({
-            title,
-            isNew: true,
-            originalIndex: index
-          });
-        }
-      } else {
-        // This is regular content
-        contentLines.push(line);
-      }
-    });
-    
-    // Find deleted subtasks - those that existed before but aren't marked as still existing
-    const deletedSubtasks = currentSubtasks
-      .filter(s => !s.stillExists)
-      .map(s => ({ id: s.id, title: s.title }));
-    
-    // Sort subtasks by their order in the original content
-    allSubtasks.sort((a, b) => a.originalIndex - b.originalIndex);
-    
-    // Now assign positions based on sorted order
-    allSubtasks.forEach((subtask, position) => {
-      if (subtask.isNew) {
-        newSubtasks.push({
-          title: subtask.title,
-          position: position
-        });
-      } else if (subtask.id) {
-        existingSubtasks.push({
-          id: subtask.id,
-          title: subtask.title,
-          position: position
-        });
-      }
-    });
-    
-    // Join the content lines back together
-    const cleanContent = contentLines.join('\n').trim();
-    
-    return { cleanContent, existingSubtasks, newSubtasks, deletedSubtasks };
-  };
   
   // Get cursor coordinates function - simplified approach without unused parameters
   const getCursorCoordinates = (textarea: HTMLTextAreaElement) => {
@@ -780,10 +684,8 @@ export function Item({
   const handleDeleteSubtaskConfirmed = (deleteChildren: boolean) => {
     if (deletingSubtaskId) {
       // Find the current subtask from our queue
-      const currentSubtask = deletedSubtasksQueue.find(s => s.id === deletingSubtaskId);
       
       // Get the subtask title for logging
-      const subtaskTitle = currentSubtask?.title || 'Unknown Subtask';
       
       // Call the existing delete function
       onDeleteItem(deletingSubtaskId, deleteChildren);
