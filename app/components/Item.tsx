@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useState, useRef, useEffect, useMemo } from 'react'
+import { type ReactNode, useCallback, useState, useRef, useEffect, useMemo, Children, isValidElement } from 'react'
 import { createPortal } from 'react-dom'
 import { useDrag } from 'react-dnd'
 import { type Database, type ItemType } from '../../src/lib/supabase/client'
@@ -165,6 +165,39 @@ export function Item({
     // Join with spaces and return
     return depLines.join(' ');
   };
+
+  // Format child items for Markdown list format
+  const formatChildItemsForEditing = () => {
+    // Only include this for items with children
+    if (!hasChildren || childCount === 0) {
+      logDebug('No children to format');
+      return '';
+    }
+    
+    logDebug('Formatting children for editing', { hasChildren, childCount });
+    
+    // Get child items directly from availableTasks using the current item's ID as parent
+    const childItems = availableTasks
+      .filter(task => task.parent_id === item.id)
+      .sort((a, b) => a.position - b.position);
+    
+    logDebug('Found child items', childItems.length);
+    
+    if (childItems.length === 0) {
+      return '';
+    }
+    
+    // Format each child as a list item with a link
+    const listItems = childItems.map(childItem => 
+      `- [${childItem.title}](#${childItem.id})`
+    );
+    
+    const formattedList = listItems.join('\n');
+    logDebug('Formatted child list', formattedList);
+    
+    // Join with newlines and return
+    return formattedList;
+  };
   
   // Automatically focus content input for new/empty items
   useEffect(() => {
@@ -176,12 +209,23 @@ export function Item({
   // Update content when starting to edit
   useEffect(() => {
     if (isEditing) {
-      // Format content with dependencies
+      // Format content with dependencies and child items
       const depsFormatted = formatDependenciesForEditing();
+      const childrenFormatted = formatChildItemsForEditing();
+      
+      logDebug('Content formatting', { 
+        title: item.title,
+        description: item.description ? 'present' : 'absent',
+        dependencies: depsFormatted ? 'present' : 'absent',
+        children: childrenFormatted ? 'present' : 'absent'
+      });
+      
       const formattedContent = item.title +
         (depsFormatted ? `\n${depsFormatted}` : '') +
-        (item.description ? `\n${item.description}` : '');
+        (item.description ? `\n${item.description}` : '') +
+        (childrenFormatted ? `\n\n${childrenFormatted}` : '');
       
+      logDebug('Setting edited content', formattedContent);
       setEditedContent(formattedContent);
       
       // Focus the textarea
@@ -197,7 +241,7 @@ export function Item({
         }
       }, 10);
     }
-  }, [isEditing, item.title, item.description, formatDependenciesForEditing, blockedByTasks, availableTasks]);
+  }, [isEditing, item.title, item.description, formatDependenciesForEditing, blockedByTasks, availableTasks, hasChildren, children]);
 
   // Close dependency suggestions when clicking outside
   useEffect(() => {
