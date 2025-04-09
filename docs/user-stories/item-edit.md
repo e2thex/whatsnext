@@ -22,6 +22,7 @@ As a user, I want to be able to edit task titles and descriptions inline so that
 10. The editing functionality should work seamlessly in both mobile and desktop views.
 11. Users can type "@" while editing to see a dropdown of available tasks and add them as dependencies in the format `@[TASK TITLE](#TASK_ID)`.
 12. The editing interface will have subtasks as a list , new subitems can be added, subitems titles can be edited and subitems can be reorder or deleted
+13. [Drag and drop](drag-drop-reordering.md) will be disabled in edit mode
 
 ## Non-Functional Requirements
 

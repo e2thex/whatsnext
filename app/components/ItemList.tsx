@@ -20,6 +20,7 @@ interface DropZoneProps {
   parentId: string | null
   position: number
   onMoveItemToPosition: (itemId: string, newPosition: number, parentId: string | null) => void
+  isAnyItemEditing?: boolean
 }
 
 // Custom hook to detect if any drag operation is in progress
@@ -41,7 +42,7 @@ function useAnyDragging() {
   return isDragging
 }
 
-function DropZone({ parentId, position, onMoveItemToPosition }: DropZoneProps) {
+function DropZone({ parentId, position, onMoveItemToPosition, isAnyItemEditing = false }: DropZoneProps) {
   const anyDragging = useAnyDragging()
   const [{ isOver }, drop] = useDrop<DragItem, void, { isOver: boolean }>({
     accept: 'ITEM',
@@ -49,7 +50,7 @@ function DropZone({ parentId, position, onMoveItemToPosition }: DropZoneProps) {
       onMoveItemToPosition(item.id, position, parentId)
       return undefined
     },
-    canDrop: () => true,
+    canDrop: () => !isAnyItemEditing,
     collect: monitor => ({
       isOver: monitor.isOver()
     })
@@ -128,6 +129,8 @@ export function ItemList({
   searchQuery,
   onUpdateSubtask
 }: ItemListProps) {
+  const [isAnyItemEditing, setIsAnyItemEditing] = useState(false);
+
   const itemsByParent = useMemo(() => {
     const map = new Map<string | null, ItemRow[]>()
     items.forEach(item => {
@@ -313,6 +316,7 @@ export function ItemList({
             parentId={item.parent_id}
             position={item.position}
             onMoveItemToPosition={onMoveItemToPosition}
+            isAnyItemEditing={isAnyItemEditing}
           />
           <Item
             item={item}
@@ -330,6 +334,7 @@ export function ItemList({
             onCreateSubtask={createSubtask}
             onUpdateSubtask={onUpdateSubtask}
             onReorderSubtasks={reorderSubtasks}
+            onEditingChange={(isEditing) => setIsAnyItemEditing(isEditing)}
             siblingCount={childItems.length}
             itemPosition={index}
             hasChildren={hasChildren}
@@ -356,6 +361,7 @@ export function ItemList({
               parentId={item.parent_id}
               position={item.position + 1}
               onMoveItemToPosition={onMoveItemToPosition}
+              isAnyItemEditing={isAnyItemEditing}
             />
           )}
         </div>
@@ -495,12 +501,14 @@ export function ItemList({
             parentId={focusedItemId || null}
             position={0}
             onMoveItemToPosition={onMoveItemToPosition}
+            isAnyItemEditing={isAnyItemEditing}
           />
         ) : (
           <DropZone
             parentId={filteredTasks[0].parent_id}
             position={0}
             onMoveItemToPosition={onMoveItemToPosition}
+            isAnyItemEditing={isAnyItemEditing}
           />
         )}
         
@@ -531,6 +539,7 @@ export function ItemList({
                   onCreateSubtask={createSubtask}
                   onUpdateSubtask={onUpdateSubtask}
                   onReorderSubtasks={reorderSubtasks}
+                  onEditingChange={(isEditing) => setIsAnyItemEditing(isEditing)}
                   siblingCount={1}
                   itemPosition={0}
                   hasChildren={false}
@@ -558,6 +567,7 @@ export function ItemList({
                 parentId={task.parent_id}
                 position={task.position + 1}
                 onMoveItemToPosition={onMoveItemToPosition}
+                isAnyItemEditing={isAnyItemEditing}
               />
             </div>
           )
@@ -611,6 +621,7 @@ export function ItemList({
                       onCreateSubtask={createSubtask}
                       onUpdateSubtask={onUpdateSubtask}
                       onReorderSubtasks={reorderSubtasks}
+                      onEditingChange={(isEditing) => setIsAnyItemEditing(isEditing)}
                       siblingCount={childItems.length}
                       itemPosition={0}
                       hasChildren={hasChildren}

@@ -27,6 +27,7 @@ interface ItemProps {
   onCreateSubtask?: (parentId: string, title: string, position: number) => void
   onUpdateSubtask?: (subtaskId: string, updates: { title: string; position: number }) => void
   onReorderSubtasks?: (parentId: string, subtaskIds: string[]) => void
+  onEditingChange?: (isEditing: boolean) => void
   siblingCount: number
   itemPosition: number
   children?: ReactNode
@@ -96,6 +97,7 @@ export function Item({
   onRemoveDateDependency,
   onCreateSubtask,
   onUpdateSubtask,
+  onEditingChange,
   siblingCount,
   itemPosition,
   children,
@@ -733,17 +735,18 @@ export function Item({
     }
   };
 
-  const [{ isDragging }, drag] = useDrag<DragItem, void, { isDragging: boolean }>({
+  const [{ isDragging }, drag] = useDrag<DragItem, unknown, { isDragging: boolean }>({
     type: 'ITEM',
-    item: (): DragItem => ({
+    item: {
       id: item.id,
       type: 'ITEM',
       parentId: item.parent_id,
       position: item.position
-    }),
+    },
     collect: (monitor) => ({
       isDragging: monitor.isDragging()
-    })
+    }),
+    canDrag: () => !isEditing
   })
 
   const setDragRef = useCallback((node: HTMLDivElement | null) => {
@@ -845,6 +848,13 @@ export function Item({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isEditing]);
+
+  // Add a useEffect to notify the parent when isEditing changes
+  useEffect(() => {
+    if (onEditingChange) {
+      onEditingChange(isEditing);
+    }
+  }, [isEditing, onEditingChange]);
 
   return (
     <div className={`
