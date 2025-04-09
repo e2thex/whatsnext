@@ -705,8 +705,6 @@ export default function Home() {
   }
 
   const createSubtask = async (parentId: string, title: string, position: number) => {
-    console.log('Creating subtask with explicit position:', { parentId, title, position });
-    
     try {
       if (!userId) {
         throw new Error('No user logged in');
@@ -718,8 +716,6 @@ export default function Home() {
         .select('*')
         .eq('parent_id', parentId)
         .order('position', { ascending: true });
-      
-      console.log('Existing subtasks before insert:', existingSubtasks);
       
       // Prepare new subtask data
       const newTaskData = {
@@ -737,12 +733,9 @@ export default function Home() {
         .single();
       
       if (error) {
-        console.error('Error creating subtask:', error);
         toast.error('Failed to create subtask');
         return;
       }
-      
-      console.log('New subtask created:', newTask);
       
       // Add the new task to our local state
       setItems(prev => [...prev, newTask]);
@@ -758,8 +751,6 @@ export default function Home() {
           }));
         
         if (tasksToUpdate.length > 0) {
-          console.log('Adjusting positions for existing tasks:', tasksToUpdate);
-          
           // Update each task's position one by one to avoid conflicts
           for (const task of tasksToUpdate) {
             const { error: updateError } = await supabase
@@ -768,7 +759,7 @@ export default function Home() {
               .eq('id', task.id);
               
             if (updateError) {
-              console.error('Error updating task position:', updateError);
+              toast.error('Error updating task positions');
             } else {
               // Update position in our local state
               setItems(prev => prev.map(item => 
@@ -781,7 +772,6 @@ export default function Home() {
       
       toast.success('Subtask created');
     } catch (error) {
-      console.error('Error in createSubtask:', error);
       toast.error('Failed to create subtask');
     }
   };
@@ -828,7 +818,6 @@ export default function Home() {
       
       toast.success('Subtasks reordered successfully');
     } catch (error) {
-      console.error('Error reordering subtasks:', error);
       toast.error('Failed to reorder subtasks');
     }
   };
@@ -845,7 +834,6 @@ export default function Home() {
         .eq('id', subtaskId);
 
       if (error) {
-        console.error('Error updating subtask:', error);
         toast.error('Failed to update subtask');
         return;
       }
@@ -861,7 +849,6 @@ export default function Home() {
       
       toast.success('Subtask updated');
     } catch (err) {
-      console.error('Error updating subtask:', err);
       toast.error('Failed to update subtask');
     }
   };

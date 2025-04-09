@@ -168,13 +168,6 @@ export function Item({
     }
   }, [isEditing, hasChildren, item.id, availableTasks]);
 
-  // Add a console debug function
-  const logDebug = (message: string, data?: unknown) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[Item ${item.id.slice(0, 4)}...] ${message}`, data);
-    }
-  };
-
   // Add function to handle resizing the textarea
   const handleTextareaResize = () => {
     if (contentInputRef.current) {
@@ -205,18 +198,13 @@ export function Item({
   const formatChildItemsForEditing = () => {
     // Only include this for items with children
     if (!hasChildren || childCount === 0) {
-      logDebug('No children to format');
       return '';
     }
-    
-    logDebug('Formatting children for editing', { hasChildren, childCount });
     
     // Get child items directly from availableTasks using the current item's ID as parent
     const childItems = availableTasks
       .filter(task => task.parent_id === item.id)
       .sort((a, b) => a.position - b.position);
-    
-    logDebug('Found child items', childItems.length);
     
     if (childItems.length === 0) {
       return '';
@@ -228,7 +216,6 @@ export function Item({
     );
     
     const formattedList = listItems.join('\n');
-    logDebug('Formatted child list', formattedList);
     
     // Join with newlines and return
     return formattedList;
@@ -248,19 +235,11 @@ export function Item({
       const depsFormatted = formatDependenciesForEditing();
       const childrenFormatted = formatChildItemsForEditing();
       
-      logDebug('Content formatting', { 
-        title: item.title,
-        description: item.description ? 'present' : 'absent',
-        dependencies: depsFormatted ? 'present' : 'absent',
-        children: childrenFormatted ? 'present' : 'absent'
-      });
-      
       const formattedContent = item.title +
         (depsFormatted ? `\n${depsFormatted}` : '') +
         (item.description ? `\n${item.description}` : '') +
         (childrenFormatted ? `\n\n${childrenFormatted}` : '');
       
-      logDebug('Setting edited content', formattedContent);
       setEditedContent(formattedContent);
       
       // Focus the textarea
@@ -466,16 +445,33 @@ export function Item({
     // Join the content lines back together
     const cleanContent = contentLines.join('\n').trim();
     
-    logDebug('Parsed subtasks', { allSubtasks, existingSubtasks, newSubtasks, deletedSubtasks });
-    
     return { cleanContent, existingSubtasks, newSubtasks, deletedSubtasks };
   };
   
+  // Get cursor coordinates function - simplified approach without unused parameters
+  const getCursorCoordinates = (textarea: HTMLTextAreaElement) => {
+    // Get textarea dimensions and position
+    const rect = textarea.getBoundingClientRect();
+    
+    // Use a simpler approach - just position below the textarea
+    return { 
+      top: rect.bottom + window.scrollY + 5, // 5px below the textarea
+      left: rect.left + window.scrollX + 10 // 10px from the left edge
+    };
+  };
+
+  // Add a simple debug function for tracing the dependency dropdown
+  const debugDependency = (message: string) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[@Dependency] ${message}`);
+    }
+  };
+
   // Completely rewrite handleTextareaKeyDown for better handling
   const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Handle @ character to trigger suggestions
     if (e.key === '@') {
-      logDebug('@ key pressed - showing suggestions');
+      debugDependency('@ key pressed - showing suggestions');
       e.preventDefault();
       
       // Get cursor position
@@ -496,21 +492,13 @@ export function Item({
           contentInputRef.current.selectionStart = newCursorPos;
           contentInputRef.current.selectionEnd = newCursorPos;
           
-          // Get coordinates for dropdown - simpler approach
-          if (contentInputRef.current) {
-            const rect = contentInputRef.current.getBoundingClientRect();
-            const coords = { 
-              top: rect.bottom + window.scrollY + 5,  // 5px below textarea
-              left: rect.left + window.scrollX + 10   // 10px from left edge
-            };
-            
-            setDepSuggestionPos(coords);
-            setFilterText('');
-            setSelectedSuggestionIndex(0);
-            setShowDepSuggestions(true);
-            
-            logDebug('Showing suggestions at', coords);
-          }
+          // Get coordinates for dropdown - using our utility function
+          const coords = getCursorCoordinates(contentInputRef.current);
+          debugDependency(`Showing dropdown at ${coords.top}, ${coords.left}`);
+          setDepSuggestionPos(coords);
+          setFilterText('');
+          setSelectedSuggestionIndex(0);
+          setShowDepSuggestions(true);
         }
       }, 10);
       
@@ -556,18 +544,6 @@ export function Item({
     }
   };
 
-  // Get cursor coordinates function - simplified approach without unused parameters
-  const getCursorCoordinates = (textarea: HTMLTextAreaElement) => {
-    // Get textarea dimensions and position
-    const rect = textarea.getBoundingClientRect();
-    
-    // Use a simpler approach - just position below the textarea
-    return { 
-      top: rect.bottom + window.scrollY + 5, // 5px below the textarea
-      left: rect.left + window.scrollX + 10 // 10px from the left edge
-    };
-  };
-
   // Modify the handleTextareaChange function to match the updated getCursorCoordinates signature
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
@@ -584,19 +560,16 @@ export function Item({
       if (lastAtPos >= 0) {
         // Get filter text (text after last @)
         const filterText = textBeforeCursor.substring(lastAtPos + 1);
-        logDebug('Filtering with', filterText);
         
         setFilterText(filterText);
         setSelectedSuggestionIndex(0);
         
         // If we typed a space after @ without starting a tag, close suggestions
         if (filterText.includes(' ') && !filterText.includes('[')) {
-          logDebug('Closing suggestions - space typed');
           setShowDepSuggestions(false);
         }
       } else {
         // No @ found, close suggestions
-        logDebug('Closing suggestions - no @ found');
         setShowDepSuggestions(false);
       }
       
@@ -629,8 +602,6 @@ export function Item({
   // Use direct DOM insertion approach for dependency
   const insertDependency = (task: ItemRow) => {
     if (!contentInputRef.current) return;
-    
-    logDebug('Inserting dependency', task.title);
     
     const textarea = contentInputRef.current;
     const cursorPos = textarea.selectionStart || 0;
@@ -672,7 +643,6 @@ export function Item({
   const handleContentSubmit = () => {
     // If we're in the process of deleting subtasks, don't proceed with the normal save flow
     if (isProcessingDeletion) {
-      logDebug('Skipping normal submit during deletion process');
       return;
     }
     
@@ -700,7 +670,7 @@ export function Item({
     const subtasksToProcess: { id?: string, title: string, position: number }[] = [];
     
     // Find all lines that start with "- " and parse them
-    contentLines.forEach((line, index) => {
+    contentLines.forEach((line) => {
       // Check for existing subtask format: - [Title](#id)
       const existingMatch = line.trim().match(/^-\s*\[(.*?)\]\(#(.*?)\)$/);
       // Check for new subtask format: - Title
@@ -727,12 +697,6 @@ export function Item({
       current => !subtasksToProcess.some(toProcess => toProcess.id === current.id)
     );
     
-    logDebug('Subtask processing', {
-      currentSubtasks: currentSubtasks.length,
-      subtasksToProcess: subtasksToProcess.length,
-      subtasksToDelete: subtasksToDelete.length
-    });
-    
     // Handle deletions first if there are any
     if (subtasksToDelete.length > 0) {
       // Set deletion mode
@@ -743,7 +707,9 @@ export function Item({
         title,
         description: description || undefined,
         dependencies,
-        subtasksToProcess
+        subtasksToProcess,
+        newSubtasks: [],
+        existingSubtaskIds: []
       });
       
       // Start deletion process
@@ -788,8 +754,6 @@ export function Item({
     description?: string, 
     dependencies?: {id: string, title: string}[]
   ) => {
-    logDebug('Updating content', { title, description: description || 'none' });
-    
     // Update the item title and description
     onUpdateItem(item.id, { title, description });
     
@@ -820,7 +784,6 @@ export function Item({
       
       // Get the subtask title for logging
       const subtaskTitle = currentSubtask?.title || 'Unknown Subtask';
-      logDebug('Deleting subtask', subtaskTitle);
       
       // Call the existing delete function
       onDeleteItem(deletingSubtaskId, deleteChildren);
@@ -837,7 +800,6 @@ export function Item({
         }, 100); // Small delay to ensure UI updates correctly
       } else {
         // All deletions are completed
-        logDebug('All subtask deletions completed - proceeding with pending operations');
         
         // Reset deletion states
         setDeletingSubtaskId(null);
@@ -1081,7 +1043,7 @@ export function Item({
                   />
                   <div className="absolute inset-x-0 top-[24px] border-t border-gray-200 opacity-50 pointer-events-none" />
                   <div className="text-xs text-gray-500 mt-1">
-                    First line: title, rest: description. Type @ to add dependencies. Supports markdown and links.
+                    First line: title, list: subtasks, rest: description. Type @ to add dependencies. Supports markdown and links.
                     <br />
                     Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> to save, <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Esc</kbd> to cancel.
                   </div>
@@ -1094,8 +1056,9 @@ export function Item({
                         position: 'fixed',
                         top: `${depSuggestionPos.top}px`,
                         left: `${depSuggestionPos.left}px`,
+                        zIndex: 9999
                       }}
-                      className="bg-white rounded-md shadow-xl border border-gray-300 max-h-64 overflow-y-auto z-[9999] w-72"
+                      className="bg-white rounded-md shadow-xl border border-gray-300 max-h-64 overflow-y-auto w-72"
                     >
                       <div className="p-2">
                         <div className="text-xs font-semibold text-gray-600 px-2 py-1 mb-1 border-b border-gray-200">
