@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface ToolbarProps {
   viewMode: 'tree' | 'list'
@@ -28,6 +28,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onAddNewTask
 }) => {
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false)
+  const filterMenuRef = useRef<HTMLDivElement>(null)
 
   // Focus search input when pressing / key
   useEffect(() => {
@@ -43,6 +45,23 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [])
+
+  // Handle clicks outside the filter menu to close it
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
+        setFilterMenuOpen(false)
+      }
+    }
+
+    if (filterMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [filterMenuOpen])
 
   // Clear search with Escape key when search is focused
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -73,6 +92,159 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       ? 'blocked' 
       : 'all'
 
+  const getFilterSummary = () => {
+    const summary = []
+    
+    if (completionFilter !== 'all') {
+      summary.push(completionFilter === 'completed' ? 'Done' : 'Todo')
+    }
+    
+    if (currentStatusFilter !== 'all') {
+      summary.push(currentStatusFilter === 'actionable' ? 'Actionable' : 'Blocked')
+    }
+    
+    return summary.length ? summary.join(', ') : 'All'
+  }
+
+  // Render filter options for the dropdown menu
+  const renderFilterOptions = () => (
+    <>
+      {/* View mode options */}
+      <div className="mb-4">
+        <h3 className="text-sm font-medium text-gray-500 mb-2">View</h3>
+        <div className="flex items-center border border-gray-300 rounded-md overflow-hidden">
+          <button
+            onClick={() => onViewModeChange('tree')}
+            className={`flex-1 px-3 py-2 flex items-center justify-center text-sm ${
+              viewMode === 'tree' 
+                ? 'bg-indigo-600 text-white' 
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M9 4v16M3 12h6M3 20h6M15 12h6M15 20h6" />
+            </svg>
+            Tree
+          </button>
+          <button
+            onClick={() => onViewModeChange('list')}
+            className={`flex-1 px-3 py-2 flex items-center justify-center text-sm ${
+              viewMode === 'list' 
+                ? 'bg-indigo-600 text-white' 
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            List
+          </button>
+        </div>
+      </div>
+
+      {/* Completion filter options */}
+      <div className="mb-4">
+        <h3 className="text-sm font-medium text-gray-500 mb-2">Completion</h3>
+        <div className="flex flex-col space-y-2">
+          <button
+            onClick={() => {
+              onCompletionFilterChange('all')
+              setFilterMenuOpen(false)
+            }}
+            className={`px-3 py-2 flex items-center text-sm rounded-md ${
+              completionFilter === 'all' 
+                ? 'bg-indigo-600 text-white' 
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+            }`}
+          >
+            All tasks
+          </button>
+          <button
+            onClick={() => {
+              onCompletionFilterChange('not-completed')
+              setFilterMenuOpen(false)
+            }}
+            className={`px-3 py-2 flex items-center text-sm rounded-md ${
+              completionFilter === 'not-completed' 
+                ? 'bg-indigo-600 text-white' 
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+            }`}
+          >
+            <svg className="w-4 h-4 mr-2" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5z" />
+            </svg>
+            Todo
+          </button>
+          <button
+            onClick={() => {
+              onCompletionFilterChange('completed')
+              setFilterMenuOpen(false)
+            }}
+            className={`px-3 py-2 flex items-center text-sm rounded-md ${
+              completionFilter === 'completed' 
+                ? 'bg-indigo-600 text-white' 
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+            }`}
+          >
+            <svg className="w-4 h-4 mr-2" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+              <rect x="3" y="3" width="14" height="14" rx="2" strokeWidth="2" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 10l3 3 5-5" />
+            </svg>
+            Done
+          </button>
+        </div>
+      </div>
+
+      {/* Status filter options */}
+      <div>
+        <h3 className="text-sm font-medium text-gray-500 mb-2">Status</h3>
+        <div className="flex flex-col space-y-2">
+          <button
+            onClick={() => {
+              toggleStatus('all')
+              setFilterMenuOpen(false)
+            }}
+            className={`px-3 py-2 flex items-center text-sm rounded-md ${
+              currentStatusFilter === 'all' 
+                ? 'bg-indigo-600 text-white' 
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+            }`}
+          >
+            Any status
+          </button>
+          <button
+            onClick={() => {
+              toggleStatus('actionable')
+              setFilterMenuOpen(false)
+            }}
+            className={`px-3 py-2 flex items-center text-sm rounded-md ${
+              currentStatusFilter === 'actionable' 
+                ? 'bg-green-600 text-white' 
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+            }`}
+          >
+            <span className="w-3 h-3 rounded-full mr-2 bg-green-500"></span>
+            Actionable
+          </button>
+          <button
+            onClick={() => {
+              toggleStatus('blocked')
+              setFilterMenuOpen(false)
+            }}
+            className={`px-3 py-2 flex items-center text-sm rounded-md ${
+              currentStatusFilter === 'blocked' 
+                ? 'bg-red-600 text-white' 
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+            }`}
+          >
+            <span className="w-3 h-3 rounded-full mr-2 bg-red-500"></span>
+            Blocked
+          </button>
+        </div>
+      </div>
+    </>
+  )
+
   return (
     <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-2 flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
       {/* Left section with Add Task button */}
@@ -85,12 +257,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          <span className="hidden sm:inline">Add Task</span>
+          <span className="hidden xl:inline">Add Task</span>
         </button>
       </div>
 
-      {/* Center section with visual controls */}
-      <div className="flex items-center gap-3 sm:gap-4 flex-wrap justify-center">
+      {/* Center section with visual controls - Only visible on medium+ screens */}
+      <div className="hidden md:flex items-center gap-3 md:gap-4 flex-wrap justify-center">
         {/* View mode toggle button */}
         <div className="flex items-center border border-gray-300 rounded-md overflow-hidden">
           <button
@@ -103,10 +275,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             aria-label="Tree view"
             title="Tree view"
           >
-            <svg className="w-5 h-5 mr-1 sm:mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <svg className="w-5 h-5 mr-1 md:mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M9 4v16M3 12h6M3 20h6M15 12h6M15 20h6" />
             </svg>
-            <span className="hidden sm:inline">Tree</span>
+            <span className="hidden xl:inline">Tree</span>
           </button>
           <button
             onClick={() => onViewModeChange('list')}
@@ -118,10 +290,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             aria-label="List view"
             title="List view"
           >
-            <svg className="w-5 h-5 mr-1 sm:mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <svg className="w-5 h-5 mr-1 md:mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
-            <span className="hidden sm:inline">List</span>
+            <span className="hidden xl:inline">List</span>
           </button>
         </div>
 
@@ -152,7 +324,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             <svg className="w-4 h-4 mr-1" viewBox="0 0 20 20" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5z" />
             </svg>
-            <span className="hidden sm:inline">Todo</span>
+            <span className="hidden xl:inline">Todo</span>
           </button>
           <button
             onClick={() => onCompletionFilterChange('completed')}
@@ -168,7 +340,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               <rect x="3" y="3" width="14" height="14" rx="2" strokeWidth="2" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 10l3 3 5-5" />
             </svg>
-            <span className="hidden sm:inline">Done</span>
+            <span className="hidden xl:inline">Done</span>
           </button>
         </div>
 
@@ -184,11 +356,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             aria-label="Show all tasks"
             title="Show tasks with any status"
           >
-            <span>Any</span>
+            <span className="md:inline hidden">Any</span>
           </button>
           <button
             onClick={() => toggleStatus('actionable')}
-            className={`px-3 py-1.5 flex items-center text-sm ${
+            className={`px-3 py-1.5 flex items-center justify-center text-sm ${
               currentStatusFilter === 'actionable' 
                 ? 'bg-green-600 text-white' 
                 : 'bg-white text-gray-700 hover:bg-gray-100'
@@ -196,13 +368,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             aria-label="Show only actionable tasks"
             title="Show only actionable tasks"
           >
-            <span className="w-2 h-2 rounded-full mr-2 bg-green-500"></span>
-            <span className="hidden sm:inline">Actionable</span>
-            <span className="sm:hidden">Action</span>
+            <span className="w-3 h-3 rounded-full md:mr-2 bg-green-500"></span>
+            <span className="hidden xl:inline">Actionable</span>
           </button>
           <button
             onClick={() => toggleStatus('blocked')}
-            className={`px-3 py-1.5 flex items-center text-sm ${
+            className={`px-3 py-1.5 flex items-center justify-center text-sm ${
               currentStatusFilter === 'blocked' 
                 ? 'bg-red-600 text-white' 
                 : 'bg-white text-gray-700 hover:bg-gray-100'
@@ -210,11 +381,46 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             aria-label="Show only blocked tasks"
             title="Show only blocked tasks"
           >
-            <span className="w-2 h-2 rounded-full mr-2 bg-red-500"></span>
-            <span className="hidden sm:inline">Blocked</span>
-            <span className="sm:hidden">Block</span>
+            <span className="w-3 h-3 rounded-full md:mr-2 bg-red-500"></span>
+            <span className="hidden xl:inline">Blocked</span>
           </button>
         </div>
+      </div>
+
+      {/* Filter button for small screens */}
+      <div className="relative md:hidden">
+        <button
+          onClick={() => setFilterMenuOpen(!filterMenuOpen)}
+          className={`flex items-center justify-center px-3 py-1.5 border rounded-md ${
+            filterMenuOpen || completionFilter !== 'all' || currentStatusFilter !== 'all'
+              ? 'bg-indigo-600 text-white border-indigo-600'
+              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+          }`}
+          aria-expanded={filterMenuOpen}
+          aria-haspopup="true"
+        >
+          <svg className="w-5 h-5 mr-1.5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+          </svg>
+          <span className="text-sm">Filter</span>
+          {(completionFilter !== 'all' || currentStatusFilter !== 'all') && (
+            <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-white bg-opacity-25">
+              {getFilterSummary()}
+            </span>
+          )}
+        </button>
+
+        {/* Filter dropdown for small screens */}
+        {filterMenuOpen && (
+          <div 
+            ref={filterMenuRef}
+            className="absolute left-0 mt-2 w-64 origin-top-left bg-white divide-y divide-gray-100 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-10"
+          >
+            <div className="px-4 py-3 space-y-4">
+              {renderFilterOptions()}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right section - Search */}
@@ -227,7 +433,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         <input
           ref={searchInputRef}
           type="text"
-          placeholder="Search tasks... (Press '/' to focus)"
+          placeholder="Search... (/)"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           onKeyDown={handleSearchKeyDown}
