@@ -761,6 +761,26 @@ export function Item({
     );
   };
 
+  // Add this new effect to handle clicking outside the editing area
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        isEditing &&
+        contentInputRef.current &&
+        !contentInputRef.current.contains(event.target as Node) &&
+        (!depSuggestionsRef.current || !depSuggestionsRef.current.contains(event.target as Node))
+      ) {
+        // Save content when clicking outside
+        handleContentSubmit();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isEditing]);
+
   return (
     <div className={`
       relative group
