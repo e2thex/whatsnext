@@ -1114,184 +1114,191 @@ export function Item({
           </div>
         )}
 
-        <div className="flex items-center gap-4">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleComplete(item.id);
-            }}
-            disabled={isBlocked}
-            className={`
-              w-5 h-5 rounded border flex items-center justify-center
-              ${item.completed ? 'bg-green-500 border-green-600' : 'border-gray-300'}
-              ${isBlocked ? 'cursor-not-allowed' : ''}
-            `}
-            title={isBlocked ? hasChildren ? 'All subitems are blocked' : 'Complete blocked tasks first' : undefined}
-          >
-            {item.completed && (
-              <svg className="w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-            )}
-          </button>
-
-          <div className="flex-grow">
-            <div className="flex items-center gap-2">
-              {hasChildren && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsCollapsed(!isCollapsed);
-                  }}
-                  className="p-1 -ml-2 text-gray-500 hover:text-gray-700"
-                >
-                  <svg 
-                    className={`w-4 h-4 transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`} 
-                    viewBox="0 0 20 20" 
-                    fill="currentColor"
-                  >
-                    <path 
-                      fillRule="evenodd" 
-                      d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" 
-                      clipRule="evenodd" 
-                    />
-                  </svg>
-                </button>
+        {/* Main content container - stack on small screens, row on larger screens */}
+        <div className="flex flex-col sm:flex-row sm:items-start gap-y-2 sm:gap-y-0 gap-x-4">
+          {/* Checkbox and content */}
+          <div className="flex items-start gap-4 flex-grow">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleComplete(item.id);
+              }}
+              disabled={isBlocked}
+              className={`
+                w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 mt-0.5
+                ${item.completed ? 'bg-green-500 border-green-600' : 'border-gray-300'}
+                ${isBlocked ? 'cursor-not-allowed' : ''}
+              `}
+              title={isBlocked ? hasChildren ? 'All subitems are blocked' : 'Complete blocked tasks first' : undefined}
+            >
+              {item.completed && (
+                <svg className="w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
               )}
-              {isEditing ? (
-                <div className="flex-grow relative" onClick={(e) => e.stopPropagation()}>
-                  <textarea
-                    ref={contentInputRef}
-                    value={editedContent}
-                    onChange={handleTextareaChange}
-                    onKeyDown={handleTextareaKeyDown}
-                    className="w-full px-1 py-0.5 text-base font-medium border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none min-h-[60px] bg-white text-gray-800"
-                    rows={Math.max(2, editedContent.split('\n').length)}
-                    placeholder="Type title here (first line)&#10;Add details here (following lines). Type @ to mention dependencies."
-                    onInput={handleTextareaResize}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <div className="absolute inset-x-0 top-[24px] border-t border-gray-200 opacity-50 pointer-events-none" />
-                  <div className="text-xs text-gray-500 mt-1">
-                    First line: title, list: subtasks, rest: description. Type @ to add dependencies. Supports markdown and links.
-                    <br />
-                    Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> to save, <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Esc</kbd> to cancel.
-                  </div>
-                  
-                  {/* Dependency suggestions dropdown - using portal to ensure it's directly in body */}
-                  {showDepSuggestions && typeof document !== 'undefined' && createPortal(
-                    <div 
-                      ref={depSuggestionsRef}
-                      style={{
-                        position: 'fixed',
-                        top: `${depSuggestionPos.top}px`,
-                        left: `${depSuggestionPos.left}px`,
-                        zIndex: 9999
-                      }}
-                      className="bg-white rounded-md shadow-xl border border-gray-300 max-h-64 overflow-y-auto w-72"
+            </button>
+
+            <div className="flex-grow">
+              <div className="flex items-center gap-2">
+                {hasChildren && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsCollapsed(!isCollapsed);
+                    }}
+                    className="p-1 -ml-2 text-gray-500 hover:text-gray-700"
+                  >
+                    <svg 
+                      className={`w-4 h-4 transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`} 
+                      viewBox="0 0 20 20" 
+                      fill="currentColor"
                     >
-                      <div className="p-2">
-                        <div className="text-xs font-semibold text-gray-600 px-2 py-1 mb-1 border-b border-gray-200">
-                          Dependencies {filterText ? `matching "${filterText}"` : ''}
-                        </div>
-                        
-                        {filteredTasks.length > 0 ? (
-                          <div className="max-h-52 overflow-y-auto">
-                            {filteredTasks.map((task, index) => (
-                              <div
-                                key={task.id}
-                                onClick={() => insertDependency(task)}
-                                className={`
-                                  px-3 py-2 text-sm cursor-pointer flex items-center
-                                  ${index === selectedSuggestionIndex ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}
-                                `}
-                              >
-                                <span className="mr-1.5 font-bold text-indigo-500">@</span>
-                                <span className="truncate">{task.title}</span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="px-3 py-2 text-sm text-gray-500">
-                            {filterText ? 'No matching tasks found' : 'Type to search for tasks'}
-                          </div>
-                        )}
-                        
-                        <div className="text-xs text-gray-500 mt-1 px-2 pt-1 border-t border-gray-100">
-                          Use ↑↓ to navigate, Enter to select
-                        </div>
-                      </div>
-                    </div>,
-                    document.body
-                  )}
-                </div>
-              ) : (
-                <div 
-                  className="flex-grow"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsEditing(true);
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <button
-                      ref={dependencyButtonRef}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsDependencyMenuOpen(!isDependencyMenuOpen)
-                      }}
-                      className="flex items-center justify-center hover:opacity-80 transition-opacity"
-                      title={isBlocked ? hasChildren ? 'All subitems are blocked' : 'Task is blocked - Click to manage dependencies' : 'Task is unblocked - Click to manage dependencies'}
-                    >
+                      <path 
+                        fillRule="evenodd" 
+                        d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" 
+                        clipRule="evenodd" 
+                      />
+                    </svg>
+                  </button>
+                )}
+                {/* Content area - edit or display mode */}
+                {isEditing ? (
+                  <div className="flex-grow relative" onClick={(e) => e.stopPropagation()}>
+                    <textarea
+                      ref={contentInputRef}
+                      value={editedContent}
+                      onChange={handleTextareaChange}
+                      onKeyDown={handleTextareaKeyDown}
+                      className="w-full px-1 py-0.5 text-base font-medium border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none min-h-[60px] bg-white text-gray-800"
+                      rows={Math.max(2, editedContent.split('\n').length)}
+                      placeholder="Type title here (first line)&#10;Add details here (following lines). Type @ to mention dependencies."
+                      onInput={handleTextareaResize}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <div className="absolute inset-x-0 top-[24px] border-t border-gray-200 opacity-50 pointer-events-none" />
+                    <div className="text-xs text-gray-500 mt-1">
+                      First line: title, list: subtasks, rest: description. Type @ to add dependencies. Supports markdown and links.
+                      <br />
+                      Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> to save, <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Esc</kbd> to cancel.
+                    </div>
+                    
+                    {/* Dependency suggestions dropdown - using portal to ensure it's directly in body */}
+                    {showDepSuggestions && typeof document !== 'undefined' && createPortal(
                       <div 
-                        className={`
-                          w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-medium
-                          ${isBlocked ? 'bg-red-500' : 'bg-green-500'}
-                        `}
+                        ref={depSuggestionsRef}
+                        style={{
+                          position: 'fixed',
+                          top: `${depSuggestionPos.top}px`,
+                          left: `${depSuggestionPos.left}px`,
+                          zIndex: 9999
+                        }}
+                        className="bg-white rounded-md shadow-xl border border-gray-300 max-h-64 overflow-y-auto w-72"
                       >
-                        {isBlocked ? blockedByTasks.length + (dateDependency ? 1 : 0) : blockingTasks.length}
-                      </div>
-                    </button>
-                    <span className="font-medium cursor-text hover:text-gray-600">
-                      {highlightMatchingText(displayTitle, searchQuery.trim())}
-                    </span>
-                    <div className="relative group/tooltip">
-                      <div
-                        ref={typeButtonRef}
+                        <div className="p-2">
+                          <div className="text-xs font-semibold text-gray-600 px-2 py-1 mb-1 border-b border-gray-200">
+                            Dependencies {filterText ? `matching "${filterText}"` : ''}
+                          </div>
+                          
+                          {filteredTasks.length > 0 ? (
+                            <div className="max-h-52 overflow-y-auto">
+                              {filteredTasks.map((task, index) => (
+                                <div
+                                  key={task.id}
+                                  onClick={() => insertDependency(task)}
+                                  className={`
+                                    px-3 py-2 text-sm cursor-pointer flex items-center
+                                    ${index === selectedSuggestionIndex ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}
+                                  `}
+                                >
+                                  <span className="mr-1.5 font-bold text-indigo-500">@</span>
+                                  <span className="truncate">{task.title}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="px-3 py-2 text-sm text-gray-500">
+                              {filterText ? 'No matching tasks found' : 'Type to search for tasks'}
+                            </div>
+                          )}
+                          
+                          <div className="text-xs text-gray-500 mt-1 px-2 pt-1 border-t border-gray-100">
+                            Use ↑↓ to navigate, Enter to select
+                          </div>
+                        </div>
+                      </div>,
+                      document.body
+                    )}
+                  </div>
+                ) : (
+                  <div 
+                    className="flex-grow"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsEditing(true);
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <button
+                        ref={dependencyButtonRef}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setIsTypeMenuOpen(!isTypeMenuOpen)
-                        }} 
-                        className={`
-                          p-1 rounded-full inline-flex items-center justify-center cursor-pointer
-                          ${typeColors[effectiveType as keyof typeof typeColors]}
-                          ${item.manual_type ? `ring-1 ${typeRingColors[effectiveType as keyof typeof typeRingColors]}` : ''}
-                        `}>
-                        {typeIcons[effectiveType as keyof typeof typeIcons]}
-                      </div>
-                      {/* Tooltip that appears on hover */}
-                      <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 translate-y-full 
-                                      opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 
-                                      pointer-events-none z-10">
-                        <div className="bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
-                          {effectiveType} {item.manual_type ? '(Manual)' : '(Auto)'}
+                          setIsDependencyMenuOpen(!isDependencyMenuOpen)
+                        }}
+                        className="flex items-center justify-center hover:opacity-80 transition-opacity"
+                        title={isBlocked ? hasChildren ? 'All subitems are blocked' : 'Task is blocked - Click to manage dependencies' : 'Task is unblocked - Click to manage dependencies'}
+                      >
+                        <div 
+                          className={`
+                            w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-medium
+                            ${isBlocked ? 'bg-red-500' : 'bg-green-500'}
+                          `}
+                        >
+                          {isBlocked ? blockedByTasks.length + (dateDependency ? 1 : 0) : blockingTasks.length}
+                        </div>
+                      </button>
+                      <span className="font-medium cursor-text hover:text-gray-600">
+                        {highlightMatchingText(displayTitle, searchQuery.trim())}
+                      </span>
+                      <div className="relative group/tooltip">
+                        <div
+                          ref={typeButtonRef}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsTypeMenuOpen(!isTypeMenuOpen)
+                          }} 
+                          className={`
+                            p-1 rounded-full inline-flex items-center justify-center cursor-pointer
+                            ${typeColors[effectiveType as keyof typeof typeColors]}
+                            ${item.manual_type ? `ring-1 ${typeRingColors[effectiveType as keyof typeof typeRingColors]}` : ''}
+                          `}>
+                          {typeIcons[effectiveType as keyof typeof typeIcons]}
+                        </div>
+                        {/* Tooltip that appears on hover */}
+                        <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 translate-y-full 
+                                        opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 
+                                        pointer-events-none z-10">
+                          <div className="bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
+                            {effectiveType} {item.manual_type ? '(Manual)' : '(Auto)'}
+                          </div>
                         </div>
                       </div>
                     </div>
+                    {displayDescription && (
+                      <div 
+                        className="mt-1 text-sm text-gray-600 cursor-text hover:text-gray-700 whitespace-pre-wrap break-words markdown-content"
+                      >
+                        {renderMarkdown(highlightMatchingText(displayDescription, searchQuery.trim()) as string)}
+                      </div>
+                    )}
                   </div>
-                  {displayDescription && (
-                    <div 
-                      className="mt-1 text-sm text-gray-600 cursor-text hover:text-gray-700 whitespace-pre-wrap break-words markdown-content"
-                    >
-                      {renderMarkdown(highlightMatchingText(displayDescription, searchQuery.trim()) as string)}
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Controls section - moves below on small screens */}
+          <div className="flex items-center sm:items-start gap-2 mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-0 w-full sm:w-auto justify-between sm:justify-end sm:flex-shrink-0">
+            {/* Up/Down controls */}
             <div className="flex gap-1">
               <button
                 onClick={(e) => {
@@ -1319,43 +1326,46 @@ export function Item({
               </button>
             </div>
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onAddChild(item.id);
-              }}
-              className="p-1 text-gray-500 hover:text-gray-700"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-            </button>
+            {/* Action buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddChild(item.id);
+                }}
+                className="p-1 text-gray-500 hover:text-gray-700"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                </svg>
+              </button>
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onFocus(item.id);
-              }}
-              className="p-1 text-gray-500 hover:text-gray-700"
-              title="Focus on this task"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M5 8a1 1 0 011-1h1V6a1 1 0 012 0v1h1a1 1 0 110 2H9v1a1 1 0 11-2 0V9H6a1 1 0 01-1-1z" />
-                <path fillRule="evenodd" d="M2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8zm6-4a4 4 0 100 8 4 4 0 000-8z" clipRule="evenodd" />
-              </svg>
-            </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFocus(item.id);
+                }}
+                className="p-1 text-gray-500 hover:text-gray-700"
+                title="Focus on this task"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M5 8a1 1 0 011-1h1V6a1 1 0 012 0v1h1a1 1 0 110 2H9v1a1 1 0 11-2 0V9H6a1 1 0 01-1-1z" />
+                  <path fillRule="evenodd" d="M2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8zm6-4a4 4 0 100 8 4 4 0 000-8z" clipRule="evenodd" />
+                </svg>
+              </button>
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsDeleteDialogOpen(true);
-              }}
-              className="p-1 text-gray-500 hover:text-red-600"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDeleteDialogOpen(true);
+                }}
+                className="p-1 text-gray-500 hover:text-red-600"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
