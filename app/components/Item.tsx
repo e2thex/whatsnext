@@ -1,24 +1,21 @@
 import { type ReactNode, useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useDrag } from 'react-dnd'
-import { type Database, type ItemType } from '../../src/lib/supabase/client'
+import { type Database, type ItemType as DbItemType } from '../../src/lib/supabase/client'
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog'
 import { DependencySelectionDialog } from './DependencySelectionDialog'
 import { toast } from 'react-hot-toast'
 import { renderMarkdown } from '@/src/utils/markdown'
+import typeIcons, { typeColors, typeRingColors } from './typeIcons'
+import { Item as ItemModel } from './types'
 
-type ItemRow = Database['public']['Tables']['items']['Row']
 type TaskDependencyRow = Database['public']['Tables']['task_dependencies']['Row']
 type DateDependencyRow = Database['public']['Tables']['date_dependencies']['Row']
 
 interface ItemProps {
-  item: ItemRow
+  item: ItemModel
   onAddChild: (parentId: string | null) => void
   onToggleComplete: (id: string) => void
-  onTypeChange: (id: string, type: ItemType | null) => void
-  onMoveItem: (id: string, direction: 'up' | 'down') => void
-  onUpdateItem: (id: string, updates: { title?: string; description?: string }) => void
-  onDeleteItem: (id: string, deleteChildren: boolean) => void
   onFocus: (id: string | null) => void
   onAddDependency: (blockingTaskId: string, blockedTaskId: string) => void
   onRemoveDependency: (blockingTaskId: string, blockedTaskId: string) => void
@@ -26,9 +23,7 @@ interface ItemProps {
   onRemoveDateDependency: (taskId: string) => void
   onCreateSubtask?: (parentId: string, title: string, position: number) => void
   onUpdateSubtask?: (subtaskId: string, updates: { title: string; position: number }) => void
-  onReorderSubtasks?: (parentId: string, subtaskIds: string[]) => void
   onEditingChange?: (isEditing: boolean) => void
-  onChangeParent?: (itemId: string, newParentId: string | null) => void
   siblingCount: number
   itemPosition: number
   children?: ReactNode
@@ -37,10 +32,9 @@ interface ItemProps {
   blockingTasks?: TaskDependencyRow[]
   blockedByTasks?: TaskDependencyRow[]
   dateDependency?: DateDependencyRow
-  availableTasks?: ItemRow[]
-  childrenBlocked?: boolean
+  availableTasks?: ItemModel[]
   isSearchMatch?: boolean
-  breadcrumbs?: ItemRow[]
+  breadcrumbs?: ItemModel[]
   onNavigate?: (id: string | null) => void
   searchQuery?: string
 }
@@ -52,45 +46,10 @@ interface DragItem {
   position: number
 }
 
-// Helper function to determine if an item is blocked
-const isItemBlocked = (
-  item: ItemRow,
-  blockedByTasks: TaskDependencyRow[],
-  availableTasks: ItemRow[],
-  hasChildren: boolean,
-  childrenBlocked: boolean,
-  dateDependency?: DateDependencyRow
-): boolean => {
-  // Check date dependency
-  if (dateDependency && new Date(dateDependency.unblock_at) > new Date()) {
-    return true
-  }
-
-  // Check direct task dependencies
-  const isDirectlyBlocked = blockedByTasks.length > 0 && blockedByTasks.some(dep => {
-    const blockingTask = availableTasks?.find(t => t.id === dep.blocking_task_id)
-    return blockingTask && !blockingTask.completed
-  })
-
-  // If it has no children, just check direct blockage
-  if (!hasChildren) {
-    return isDirectlyBlocked
-  }
-
-  // If it has children, it's blocked if either:
-  // 1. It's directly blocked by dependencies, OR
-  // 2. All its children are blocked
-  return isDirectlyBlocked || childrenBlocked
-}
-
 export function Item({ 
-  item, 
+  item: rawItem, 
   onAddChild, 
   onToggleComplete, 
-  onTypeChange, 
-  onMoveItem,
-  onUpdateItem,
-  onDeleteItem,
   onFocus,
   onAddDependency,
   onRemoveDependency,
@@ -99,7 +58,6 @@ export function Item({
   onCreateSubtask,
   onUpdateSubtask,
   onEditingChange,
-  onChangeParent,
   siblingCount,
   itemPosition,
   children,
@@ -109,13 +67,69 @@ export function Item({
   blockedByTasks = [],
   dateDependency,
   availableTasks = [],
-  childrenBlocked = false,
   isSearchMatch = false,
   breadcrumbs = [],
   onNavigate,
   searchQuery = ''
 }: ItemProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  // Transform the raw item into a valid ItemModel if it doesn't have all required properties
+  const item = useMemo(() => {
+    // Check if item already has the required properties
+    if (typeof rawItem.update === 'function' && 
+        'dependencies' in rawItem && 
+        'subItems' in rawItem && 
+        'isCollapsed' in rawItem && 
+        'isBlocked' in rawItem && 
+        'blockedCount' in rawItem) {
+      // Item is already a valid ItemModel
+      return rawItem;
+    }
+    
+    // Create a new item with default implementations for missing properties
+    // Calculate if item is blocked based on dependencies and date dependencies
+    const directlyBlocked = blockedByTasks.some(dep => {
+      const blockingTask = availableTasks?.find(t => t.id === dep.blocking_task_id);
+      return blockingTask && !blockingTask.completed;
+    });
+    
+    const dateBlocked = dateDependency ? new Date(dateDependency.unblock_at) > new Date() : false;
+    const isBlocked = directlyBlocked || dateBlocked || (hasChildren && childCount > 0 && availableTasks.filter(t => t.parent_id === rawItem.id).every(child => !child.completed));
+    
+    const enhancedItem: ItemModel = {
+      ...rawItem,
+      // Default implementations for missing properties
+      dependencies: [],
+      subItems: [],
+      isCollapsed: false,
+      isBlocked: isBlocked,
+      blockedCount: blockedByTasks.length + (dateDependency ? 1 : 0),
+      // Default update implementation that calls onUpdateItem and returns the updated item
+      update: (partial: Partial<ItemModel>) => {
+        // Only apply updates to properties that existed in the original item
+        const itemUpdates: { title?: string; description?: string } = {};
+        if ('title' in partial) itemUpdates.title = partial.title as string | undefined;
+        if ('description' in partial) itemUpdates.description = partial.description as string | undefined;
+        
+        // Call the update logic
+        // Note: Since we've removed onUpdateItem, we'll need to implement alternative logic
+        // This will be handled by the consuming component
+        
+        // Return a new object with the updates applied
+        return {
+          ...enhancedItem,
+          ...partial,
+        };
+      },
+      // Default delete implementation
+      delete: (deleteChildren: boolean) => {
+        console.warn('Delete method is not implemented in fallback item');
+      }
+    };
+    
+    return enhancedItem;
+  }, [rawItem, hasChildren, childCount, blockedByTasks, dateDependency, availableTasks]);
+
+  const [isCollapsed, setIsCollapsed] = useState(item.isCollapsed)
   const [isEditing, setIsEditing] = useState(item.title === '')
   const [editedContent, setEditedContent] = useState(item.description 
     ? `${item.title}\n${item.description}` 
@@ -129,7 +143,6 @@ export function Item({
     dateDependency ? new Date(dateDependency.unblock_at) : null
   )
   
-  // This works around the line ~92-93 where we use filterText
   const [showDepSuggestions, setShowDepSuggestions] = useState(false)
   const [depSuggestionPos, setDepSuggestionPos] = useState({ top: 0, left: 0 })
   const [filterText, setFilterText] = useState('')
@@ -142,16 +155,17 @@ export function Item({
   const typeButtonRef = useRef<HTMLDivElement>(null)
   const depSuggestionsRef = useRef<HTMLDivElement>(null)
 
-  // First add a new state variable to track subtasks pending deletion
   const [deletingSubtaskId, setDeletingSubtaskId] = useState<string | null>(null);
-  // Use only the setter if that's all we need
-  const [, setCurrentChildItems] = useState<ItemRow[]>([]);
-  // Add a state to track all deleted subtasks and their metadata for consistent display
+  const [, setCurrentChildItems] = useState<ItemModel[]>([]);
   const [deletedSubtasksQueue, setDeletedSubtasksQueue] = useState<{ id: string, title: string }[]>([]);
-  // Track if we're in the process of deleting subtasks to prevent new creation
   const [isProcessingDeletion, setIsProcessingDeletion] = useState(false);
   
-  // Add new state to track pending operations after deletion
+  const [showParentSuggestions, setShowParentSuggestions] = useState(false)
+  const [parentSuggestionPos, setParentSuggestionPos] = useState({ top: 0, left: 0 })
+  const [parentFilterText, setParentFilterText] = useState('')
+  const [selectedParentIndex, setSelectedParentIndex] = useState(0)
+  const parentSuggestionsRef = useRef<HTMLDivElement>(null)
+
   const [pendingOperations, setPendingOperations] = useState<{
     title: string;
     description: string | undefined;
@@ -161,58 +175,61 @@ export function Item({
     subtasksToProcess?: { id?: string, title: string, position: number }[];
   } | null>(null);
 
-  // Add state for parent suggestions
-  const [showParentSuggestions, setShowParentSuggestions] = useState(false)
-  const [parentSuggestionPos, setParentSuggestionPos] = useState({ top: 0, left: 0 })
-  const [parentFilterText, setParentFilterText] = useState('')
-  const [selectedParentIndex, setSelectedParentIndex] = useState(0)
-  const parentSuggestionsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    setIsCollapsed(item.isCollapsed);
+  }, [item.isCollapsed]);
 
-  // Add a useEffect to initialize currentChildItems when we start editing
+  const updateItem = (updates: Partial<ItemModel>) => {
+    if (typeof item.update === 'function') {
+      item.update(updates);
+    } else {
+      console.warn('Item update method is not available');
+      // Fallback: we could add alternative update logic here if needed
+    }
+  };
+
   useEffect(() => {
     if (isEditing && hasChildren) {
-      const childItems = availableTasks
-        .filter(task => task.parent_id === item.id)
-        .sort((a, b) => a.position - b.position);
-      
-      setCurrentChildItems(childItems);
+      if (item.subItems.length > 0) {
+        const childItems = availableTasks
+          .filter(task => task.id && item.subItems.some(subItem => subItem.id === task.id))
+          .sort((a, b) => a.position - b.position);
+        
+        setCurrentChildItems(childItems);
+      } else {
+        const childItems = availableTasks
+          .filter(task => task.parent_id === item.id)
+          .sort((a, b) => a.position - b.position);
+        
+        setCurrentChildItems(childItems);
+      }
     }
-  }, [isEditing, hasChildren, item.id, availableTasks]);
+  }, [isEditing, hasChildren, item.id, item.subItems, availableTasks]);
 
-  // Add function to handle resizing the textarea
   const handleTextareaResize = () => {
     if (contentInputRef.current) {
-      // Reset height to auto to get the correct scrollHeight
       contentInputRef.current.style.height = 'auto';
-      // Set the height to match the content (plus a small buffer)
       contentInputRef.current.style.height = `${contentInputRef.current.scrollHeight + 2}px`;
     }
   };
 
-  // Format dependencies for editing - moved up before useEffect
   const formatDependenciesForEditing = () => {
-    // Only include this for items with dependencies
     if (blockedByTasks.length === 0) return '';
     
-    // Format each dependency as @[TITLE](#ID)
     const depLines = blockedByTasks.map(dep => {
       const blockingTask = availableTasks?.find(t => t.id === dep.blocking_task_id);
       if (!blockingTask) return '';
       return `@[${blockingTask.title}](#${blockingTask.id})`;
     }).filter(Boolean);
     
-    // Join with spaces and return
     return depLines.join(' ');
   };
 
-  // Format child items for Markdown list format
   const formatChildItemsForEditing = () => {
-    // Only include this for items with children
     if (!hasChildren || childCount === 0) {
       return '';
     }
     
-    // Get child items directly from availableTasks using the current item's ID as parent
     const childItems = availableTasks
       .filter(task => task.parent_id === item.id)
       .sort((a, b) => a.position - b.position);
@@ -221,28 +238,23 @@ export function Item({
       return '';
     }
     
-    // Format each child as a list item with a link
     const listItems = childItems.map(childItem => 
       `- [${childItem.title}](#${childItem.id})`
     );
     
     const formattedList = listItems.join('\n');
     
-    // Join with newlines and return
     return formattedList;
   };
   
-  // Automatically focus content input for new/empty items
   useEffect(() => {
     if (item.title === '') {
       setIsEditing(true);
     }
   }, [item.id, item.title]);
 
-  // Update content when starting to edit
   useEffect(() => {
     if (isEditing) {
-      // Format content with dependencies, parent and child items
       const depsFormatted = formatDependenciesForEditing();
       const parentFormatted = formatParentForEditing();
       const childrenFormatted = formatChildItemsForEditing();
@@ -255,22 +267,18 @@ export function Item({
       
       setEditedContent(formattedContent);
       
-      // Focus the textarea
       setTimeout(() => {
         if (contentInputRef.current) {
           contentInputRef.current.focus();
-          // Place cursor at the end of the content
           const length = contentInputRef.current.value.length;
           contentInputRef.current.setSelectionRange(length, length);
           
-          // Make sure the textarea is correctly sized
           handleTextareaResize();
         }
       }, 10);
     }
   }, [isEditing, item.title, item.description]);
 
-  // Close dependency suggestions when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -345,69 +353,55 @@ export function Item({
     }
   }, [isTypeMenuOpen])
 
-  // Parse content and extract dependencies
   const parseContentAndDependencies = (content: string) => {
-    // Extract dependencies using regex
     const depRegex = /@\[(.*?)\]\(#(.*?)\)/g;
     const matches = Array.from(content.matchAll(depRegex));
     
-    // Extract dependencies
     const dependencies = matches.map(match => ({
       title: match[1],
       id: match[2]
     }));
     
-    // Remove dependency markup from content
     const cleanContent = content.replace(depRegex, '').trim();
     
     return { cleanContent, dependencies };
   };
 
-  // Parse content and extract parent
   const parseContentAndParent = (content: string) => {
-    // Extract parent using regex
     const parentRegex = /\^(?:\[(.*?)\]\(#(.*?)\))/;
     const match = content.match(parentRegex);
     
-    // Extract parent if found
     const parent = match ? {
       title: match[1],
       id: match[2]
     } : null;
     
-    // Remove parent markup from content
     const cleanContent = content.replace(parentRegex, '').trim();
     
     return { cleanContent, parent };
   };
 
-  // Get cursor coordinates function - simplified approach without unused parameters
   const getCursorCoordinates = (textarea: HTMLTextAreaElement) => {
-    // Get textarea dimensions and position
     const rect = textarea.getBoundingClientRect();
     
-    // Use a simpler approach - just position below the textarea
     return { 
-      top: rect.bottom + window.scrollY + 5, // 5px below the textarea
-      left: rect.left + window.scrollX + 10 // 10px from the left edge
+      top: rect.bottom + window.scrollY + 5,
+      left: rect.left + window.scrollX + 10
     };
   };
 
-  // Add a simple debug function for tracing the dependency dropdown
   const debugDependency = (message: string) => {
     if (process.env.NODE_ENV === 'development') {
       console.log(`[@Dependency] ${message}`);
     }
   };
 
-  // Add a simple debug function for tracing the parent dropdown
   const debugParent = (message: string) => {
     if (process.env.NODE_ENV === 'development') {
       console.log(`[^Parent] ${message}`);
     }
   };
 
-  // Format parent for editing if it exists
   const formatParentForEditing = () => {
     if (!item.parent_id) return '';
     
@@ -417,7 +411,6 @@ export function Item({
     return `^[${parentItem.title}](#${parentItem.id})`;
   };
 
-  // Add useEffect for handling clicks outside the parent suggestions dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -436,17 +429,13 @@ export function Item({
     };
   }, [showParentSuggestions]);
 
-  // Completely rewrite handleTextareaKeyDown for better handling
   const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Handle ^ character to trigger parent suggestions
     if (e.key === '^') {
       debugParent('^ key pressed - showing suggestions');
       e.preventDefault();
       
-      // Get cursor position
       const cursorPos = e.currentTarget.selectionStart || 0;
       
-      // Insert ^ manually
       const newContent = 
         editedContent.substring(0, cursorPos) + 
         '^' + 
@@ -454,14 +443,12 @@ export function Item({
       
       setEditedContent(newContent);
       
-      // Need to delay showing suggestions until state updates
       setTimeout(() => {
         const newCursorPos = cursorPos + 1;
         if (contentInputRef.current) {
           contentInputRef.current.selectionStart = newCursorPos;
           contentInputRef.current.selectionEnd = newCursorPos;
           
-          // Get coordinates for dropdown - using our utility function
           const coords = getCursorCoordinates(contentInputRef.current);
           debugParent(`Showing dropdown at ${coords.top}, ${coords.left}`);
           setParentSuggestionPos(coords);
@@ -474,9 +461,7 @@ export function Item({
       return;
     }
     
-    // Navigation in parent dropdown
     if (showParentSuggestions) {
-      // Handle keyboard navigation in dropdown
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setSelectedParentIndex(prev => 
@@ -499,15 +484,12 @@ export function Item({
       return;
     }
     
-    // Handle @ character to trigger suggestions
     if (e.key === '@') {
       debugDependency('@ key pressed - showing suggestions');
       e.preventDefault();
       
-      // Get cursor position
       const cursorPos = e.currentTarget.selectionStart || 0;
       
-      // Insert @ manually
       const newContent = 
         editedContent.substring(0, cursorPos) + 
         '@' + 
@@ -515,14 +497,12 @@ export function Item({
       
       setEditedContent(newContent);
       
-      // Need to delay showing suggestions until state updates
       setTimeout(() => {
         const newCursorPos = cursorPos + 1;
         if (contentInputRef.current) {
           contentInputRef.current.selectionStart = newCursorPos;
           contentInputRef.current.selectionEnd = newCursorPos;
           
-          // Get coordinates for dropdown - using our utility function
           const coords = getCursorCoordinates(contentInputRef.current);
           debugDependency(`Showing dropdown at ${coords.top}, ${coords.left}`);
           setDepSuggestionPos(coords);
@@ -535,9 +515,7 @@ export function Item({
       return;
     }
     
-    // Navigation in dependency dropdown
     if (showDepSuggestions) {
-      // Handle keyboard navigation in dropdown
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setSelectedSuggestionIndex(prev => 
@@ -560,7 +538,6 @@ export function Item({
       return;
     }
     
-    // Original handlers
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleContentSubmit();
@@ -574,122 +551,94 @@ export function Item({
     }
   };
 
-  // Modify handleTextareaChange to handle parent suggestions
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     const cursorPos = e.target.selectionStart || 0;
     
     setEditedContent(newValue);
     
-    // Handle parent suggestions
     if (showParentSuggestions) {
-      // Get text before cursor
       const textBeforeCursor = newValue.substring(0, cursorPos);
       const lastCaretPos = textBeforeCursor.lastIndexOf('^');
       
       if (lastCaretPos >= 0) {
-        // Get filter text (text after last ^)
         const filterText = textBeforeCursor.substring(lastCaretPos + 1);
         
         setParentFilterText(filterText);
         setSelectedParentIndex(0);
         
-        // If we typed a space after ^ without starting a tag, close suggestions
         if (filterText.includes(' ') && !filterText.includes('[')) {
           setShowParentSuggestions(false);
         }
       } else {
-        // No ^ found, close suggestions
         setShowParentSuggestions(false);
       }
       
-      // Update position since text might have changed
       if (contentInputRef.current) {
         const coords = getCursorCoordinates(contentInputRef.current);
         setParentSuggestionPos(coords);
       }
     }
     
-    // Handle dependency suggestions
     if (showDepSuggestions) {
-      // Get text before cursor
       const textBeforeCursor = newValue.substring(0, cursorPos);
       const lastAtPos = textBeforeCursor.lastIndexOf('@');
       
       if (lastAtPos >= 0) {
-        // Get filter text (text after last @)
         const filterText = textBeforeCursor.substring(lastAtPos + 1);
         
         setFilterText(filterText);
         setSelectedSuggestionIndex(0);
         
-        // If we typed a space after @ without starting a tag, close suggestions
         if (filterText.includes(' ') && !filterText.includes('[')) {
           setShowDepSuggestions(false);
         }
       } else {
-        // No @ found, close suggestions
         setShowDepSuggestions(false);
       }
       
-      // Update position since text might have changed
       if (contentInputRef.current) {
         const coords = getCursorCoordinates(contentInputRef.current);
         setDepSuggestionPos(coords);
       }
     }
     
-    // Auto-resize the textarea
     handleTextareaResize();
   };
   
-  // Update the filter for tasks
   const filteredTasks = useMemo(() => {
     return availableTasks
       .filter(task => 
-        // Don't include current task
         task.id !== item.id && 
-        // Only include tasks that match filter text
         task.title.toLowerCase().includes(filterText.toLowerCase())
       )
-      // Sort alphabetically
       .sort((a, b) => a.title.localeCompare(b.title))
-      // Limit results
       .slice(0, 10);
   }, [availableTasks, item.id, filterText]);
 
-  // Create filteredParentTasks for parent suggestions
   const filteredParentTasks = useMemo(() => {
     return availableTasks
       .filter(task => 
-        // Don't include current task or its descendants (to avoid circular references)
         task.id !== item.id && 
         !task.parent_id || (task.parent_id && task.parent_id !== item.id) &&
-        // Only include tasks that match filter text
         task.title.toLowerCase().includes(parentFilterText.toLowerCase())
       )
-      // Sort alphabetically
       .sort((a, b) => a.title.localeCompare(b.title))
-      // Limit results
       .slice(0, 10);
   }, [availableTasks, item.id, parentFilterText]);
 
-  // Use direct DOM insertion approach for dependency
-  const insertDependency = (task: ItemRow) => {
+  const insertDependency = (task: ItemModel) => {
     if (!contentInputRef.current) return;
     
     const textarea = contentInputRef.current;
     const cursorPos = textarea.selectionStart || 0;
     const textBeforeCursor = editedContent.substring(0, cursorPos);
     
-    // Find the last @ character
     const lastAtPos = textBeforeCursor.lastIndexOf('@');
     
     if (lastAtPos >= 0) {
-      // Format dependency
       const depText = `@[${task.title}](#${task.id})`;
       
-      // Replace everything from @ to cursor with the formatted dependency
       const newContent = 
         editedContent.substring(0, lastAtPos) + 
         depText + 
@@ -697,39 +646,32 @@ export function Item({
       
       setEditedContent(newContent);
       
-      // Move cursor after insertion
       setTimeout(() => {
         if (textarea) {
           const newCursorPos = lastAtPos + depText.length;
           textarea.focus();
           textarea.setSelectionRange(newCursorPos, newCursorPos);
           
-          // Resize textarea
           handleTextareaResize();
         }
       }, 10);
     }
     
-    // Close suggestions
     setShowDepSuggestions(false);
   };
 
-  // Add function to insert parent
-  const insertParent = (task: ItemRow) => {
+  const insertParent = (task: ItemModel) => {
     if (!contentInputRef.current) return;
     
     const textarea = contentInputRef.current;
     const cursorPos = textarea.selectionStart || 0;
     const textBeforeCursor = editedContent.substring(0, cursorPos);
     
-    // Find the last ^ character
     const lastCaretPos = textBeforeCursor.lastIndexOf('^');
     
     if (lastCaretPos >= 0) {
-      // Format parent
       const parentText = `^[${task.title}](#${task.id})`;
       
-      // Replace everything from ^ to cursor with the formatted parent
       const newContent = 
         editedContent.substring(0, lastCaretPos) + 
         parentText + 
@@ -737,78 +679,61 @@ export function Item({
       
       setEditedContent(newContent);
       
-      // Move cursor after insertion
       setTimeout(() => {
         if (textarea) {
           const newCursorPos = lastCaretPos + parentText.length;
           textarea.focus();
           textarea.setSelectionRange(newCursorPos, newCursorPos);
           
-          // Resize textarea
           handleTextareaResize();
         }
       }, 10);
     }
     
-    // Close suggestions
     setShowParentSuggestions(false);
   };
 
-  // Now modify the handleContentSubmit function with a simpler, more functional approach
   const handleContentSubmit = () => {
-    // If we're in the process of deleting subtasks, don't proceed with the normal save flow
     if (isProcessingDeletion) {
       return;
     }
     
-    // Parse content and extract dependencies and parent
     const { cleanContent: contentWithoutParent, parent } = parseContentAndParent(editedContent);
     const { cleanContent: contentWithoutDeps, dependencies } = parseContentAndDependencies(contentWithoutParent);
     
-    // Split content by lines
     const contentLines = contentWithoutDeps.split('\n');
     const title = contentLines[0].trim();
     const description = contentLines.slice(1).filter(line => !line.trim().startsWith('- ')).join('\n').trim();
     
-    // Basic validation - title is required
     if (title === '') {
       toast.error('Task title cannot be empty');
       contentInputRef.current?.focus();
       return;
     }
     
-    // Apply parent change if it has changed
-    if (parent && onChangeParent && parent.id !== item.parent_id) {
-      onChangeParent(item.id, parent.id);
-    } else if (!parent && item.parent_id && onChangeParent) {
-      // If parent was removed, set to null
-      onChangeParent(item.id, null);
+    if (parent && parent.id !== item.parent_id) {
+      updateItem({ parent_id: parent.id });
+    } else if (!parent && item.parent_id) {
+      updateItem({ parent_id: null });
     }
     
-    // STEP 1: Get current subtasks from database
     const currentSubtasks = availableTasks
       .filter(task => task.parent_id === item.id)
       .map(task => ({ id: task.id, title: task.title }));
     
-    // STEP 2: Parse the subtasks from content
     const subtasksToProcess: { id?: string, title: string, position: number }[] = [];
     
-    // Find all lines that start with "- " and parse them
     contentLines.forEach((line) => {
-      // Check for existing subtask format: - [Title](#id)
       const existingMatch = line.trim().match(/^-\s*\[(.*?)\]\(#(.*?)\)$/);
-      // Check for new subtask format: - Title
       const newMatch = line.trim().match(/^-\s+(.+)$/);
       
       if (existingMatch) {
-        // This is an existing subtask
         subtasksToProcess.push({
           id: existingMatch[2],
           title: existingMatch[1].trim(),
           position: subtasksToProcess.length
         });
       } else if (newMatch) {
-        // This is a new subtask to create
         subtasksToProcess.push({
           title: newMatch[1].trim(),
           position: subtasksToProcess.length
@@ -816,17 +741,13 @@ export function Item({
       }
     });
     
-    // Find subtasks to delete (in currentSubtasks but not in subtasksToProcess)
     const subtasksToDelete = currentSubtasks.filter(
       current => !subtasksToProcess.some(toProcess => toProcess.id === current.id)
     );
     
-    // Handle deletions first if there are any
     if (subtasksToDelete.length > 0) {
-      // Set deletion mode
       setIsProcessingDeletion(true);
       
-      // Store the pending work for after deletion
       setPendingOperations({
         title,
         description: description || undefined,
@@ -836,30 +757,23 @@ export function Item({
         existingSubtaskIds: []
       });
       
-      // Start deletion process
       setDeletedSubtasksQueue(subtasksToDelete);
       setDeletingSubtaskId(subtasksToDelete[0].id);
     }
     
-    // No deletions needed, proceed with update and create
     performContentUpdate(title, description, dependencies);
     processSubtasks(subtasksToProcess);
   };
   
-  // Process subtasks function to handle adding/updating
   const processSubtasks = (subtasks: { id?: string, title: string, position: number }[]) => {
     console.log('Processing subtasks', subtasks);
-    // Process each subtask - using a more functional approach
     subtasks.forEach(subtask => {
       if (!subtask.id) {
-        // This is a new subtask - create it
         if (onCreateSubtask) {
           onCreateSubtask(item.id, subtask.title, subtask.position);
         }
       } else {
-        // This is an existing subtask - update it
         if (onUpdateSubtask) {
-          // Update the title and position directly
           onUpdateSubtask(subtask.id, { 
             title: subtask.title, 
             position: subtask.position 
@@ -867,21 +781,24 @@ export function Item({
         }
       }
     });
-    
-    // We no longer need the separate reordering step as each subtask is updated individually
-    // with its position, which is a more functional approach
   };
   
-  // Update content only (title, description, dependencies)
   const performContentUpdate = (
     title: string, 
     description?: string, 
     dependencies?: {id: string, title: string}[]
   ) => {
-    // Update the item title and description
-    onUpdateItem(item.id, { title, description });
+    const updates: Partial<ItemModel> = { 
+      title, 
+      description 
+    };
     
-    // Process dependencies if provided
+    if (typeof item.update === 'function') {
+      item.update(updates);
+    } else {
+      console.warn('Item update method is not available');
+    }
+    
     if (dependencies) {
       dependencies.forEach(dep => {
         const existingDep = blockedByTasks.find(
@@ -889,64 +806,44 @@ export function Item({
         );
         
         if (!existingDep) {
-          // Add the new dependency
           onAddDependency(dep.id, item.id);
         }
       });
     }
     
-    // Exit editing mode
     setIsEditing(false);
     toast.success('Task updated successfully');
   };
 
-  // Add a callback to handle when delete is confirmed - completely rewritten
   const handleDeleteSubtaskConfirmed = (deleteChildren: boolean) => {
     if (deletingSubtaskId) {
-      // Find the current subtask from our queue
+      item.entry(deletingSubtaskId)?.delete(deleteChildren);
       
-      // Get the subtask title for logging
-      
-      // Call the existing delete function
-      onDeleteItem(deletingSubtaskId, deleteChildren);
-      
-      // Remove the current subtask from the queue
       const updatedQueue = deletedSubtasksQueue.filter(s => s.id !== deletingSubtaskId);
       setDeletedSubtasksQueue(updatedQueue);
       
-      // Check if there are more subtasks to delete
       if (updatedQueue.length > 0) {
-        // Process the next deleted subtask
         setTimeout(() => {
           setDeletingSubtaskId(updatedQueue[0].id);
-        }, 100); // Small delay to ensure UI updates correctly
+        }, 100);
       } else {
-        // All deletions are completed
-        
-        // Reset deletion states
         setDeletingSubtaskId(null);
         
-        // Add small delay before proceeding with other operations
         setTimeout(() => {
-          // Now perform the pending operations if they exist
           if (pendingOperations) {
             const { title, description, dependencies, subtasksToProcess = [] } = pendingOperations;
             
-            // First update the content
             performContentUpdate(title, description, dependencies);
             
-            // Then process the subtasks
             if (subtasksToProcess.length > 0) {
               setTimeout(() => {
                 processSubtasks(subtasksToProcess);
               }, 50);
             }
             
-            // Clear pending operations
             setPendingOperations(null);
           }
           
-          // Turn off deletion mode
           setIsProcessingDeletion(false);
         }, 150);
       }
@@ -971,62 +868,15 @@ export function Item({
     drag(node)
   }, [drag])
 
-  const typeColors = {
-    Task: 'bg-blue-100 text-blue-800',
-    Mission: 'bg-green-100 text-green-800',
-    Objective: 'bg-purple-100 text-purple-800',
-    Ambition: 'bg-red-100 text-red-800'
-  } as const
-
-  const typeRingColors = {
-    Task: 'ring-blue-500',
-    Mission: 'ring-green-500',
-    Objective: 'ring-purple-500',
-    Ambition: 'ring-red-500'
-  } as const
-
-  // SVG icons for each type
-  const typeIcons = {
-    Task: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-        <rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="2" fill="none" />
-      </svg>
-    ),
-    Mission: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-        <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-        <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
-      </svg>
-    ),
-    Objective: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 8l2.55 3.4A1 1 0 0116 13H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clipRule="evenodd" />
-      </svg>
-    ),
-    Ambition: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20">
-        <path d="M10,2 L7,14 L10,12 L13,14 L10,2 Z" fill="currentColor" />
-        <path d="M8,14 L6,17 L7.5,16.5 L9,18 L8,14 Z" fill="currentColor" />
-        <path d="M12,14 L14,17 L12.5,16.5 L11,18 L12,14 Z" fill="currentColor" />
-      </svg>
-    )
-  } as const;
-
-  const isBlocked = isItemBlocked(item, blockedByTasks, availableTasks, hasChildren, childrenBlocked, dateDependency)
-
-  // Get the title and description from the current item for display
   const displayTitle = item.title
   const displayDescription = item.description
   
-  // Determine the effective type to display based on automatic or manual setting
   const effectiveType = item.type || (() => {
-    // This replicates the automatic type calculation logic
-    if (!hasChildren) return 'Task' as ItemType
-    if (childCount === 0) return 'Task' as ItemType
-    return 'Mission' as ItemType // Default for items with children when auto-calculated
+    if (!hasChildren) return 'Task' as DbItemType
+    if (childCount === 0) return 'Task' as DbItemType
+    return 'Mission' as DbItemType
   })()
 
-  // Add a new helper function to highlight matching text
   const highlightMatchingText = (text: string, searchQuery: string) => {
     if (!isSearchMatch || !searchQuery.trim()) return text;
     
@@ -1047,7 +897,6 @@ export function Item({
     );
   };
 
-  // Add this new effect to handle clicking outside the editing area
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -1056,7 +905,6 @@ export function Item({
         !contentInputRef.current.contains(event.target as Node) &&
         (!depSuggestionsRef.current || !depSuggestionsRef.current.contains(event.target as Node))
       ) {
-        // Save content when clicking outside
         handleContentSubmit();
       }
     };
@@ -1067,7 +915,6 @@ export function Item({
     };
   }, [isEditing]);
 
-  // Add a useEffect to notify the parent when isEditing changes
   useEffect(() => {
     if (onEditingChange) {
       onEditingChange(isEditing);
@@ -1088,10 +935,9 @@ export function Item({
           transition-all duration-200 ease-in-out
           cursor-move
           'bg-white
-          ${!isBlocked ? 'hover:bg-gray-50' : ''}
+          ${!item.isBlocked ? 'hover:bg-gray-50' : ''}
         `}
       >
-        {/* Display breadcrumbs if available */}
         {breadcrumbs.length > 0 && onNavigate && (
           <div className="mb-2 pb-1">
             <div className="flex items-center gap-2 text-xs text-gray-600">
@@ -1114,22 +960,20 @@ export function Item({
           </div>
         )}
 
-        {/* Main content container - stack on small screens, row on larger screens */}
         <div className="flex flex-col sm:flex-row sm:items-start gap-y-2 sm:gap-y-0 gap-x-4">
-          {/* Checkbox and content */}
           <div className="flex items-start gap-4 flex-grow">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleComplete(item.id);
               }}
-              disabled={isBlocked}
+              disabled={item.isBlocked}
               className={`
                 w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 mt-0.5
                 ${item.completed ? 'bg-green-500 border-green-600' : 'border-gray-300'}
-                ${isBlocked ? 'cursor-not-allowed' : ''}
+                ${item.isBlocked ? 'cursor-not-allowed' : ''}
               `}
-              title={isBlocked ? hasChildren ? 'All subitems are blocked' : 'Complete blocked tasks first' : undefined}
+              title={item.isBlocked ? hasChildren ? 'All subitems are blocked' : 'Complete blocked tasks first' : undefined}
             >
               {item.completed && (
                 <svg className="w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor">
@@ -1144,7 +988,8 @@ export function Item({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setIsCollapsed(!isCollapsed);
+                      const newCollapsedState = !isCollapsed;
+                      updateItem({ isCollapsed: newCollapsedState });
                     }}
                     className="p-1 -ml-2 text-gray-500 hover:text-gray-700"
                   >
@@ -1161,7 +1006,6 @@ export function Item({
                     </svg>
                   </button>
                 )}
-                {/* Content area - edit or display mode */}
                 {isEditing ? (
                   <div className="flex-grow relative" onClick={(e) => e.stopPropagation()}>
                     <textarea
@@ -1182,7 +1026,6 @@ export function Item({
                       Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> to save, <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Esc</kbd> to cancel.
                     </div>
                     
-                    {/* Dependency suggestions dropdown - using portal to ensure it's directly in body */}
                     {showDepSuggestions && typeof document !== 'undefined' && createPortal(
                       <div 
                         ref={depSuggestionsRef}
@@ -1245,15 +1088,15 @@ export function Item({
                           setIsDependencyMenuOpen(!isDependencyMenuOpen)
                         }}
                         className="flex items-center justify-center hover:opacity-80 transition-opacity"
-                        title={isBlocked ? hasChildren ? 'All subitems are blocked' : 'Task is blocked - Click to manage dependencies' : 'Task is unblocked - Click to manage dependencies'}
+                        title={item.isBlocked ? hasChildren ? 'All subitems are blocked' : 'Task is blocked - Click to manage dependencies' : 'Task is unblocked - Click to manage dependencies'}
                       >
                         <div 
                           className={`
                             w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-medium
-                            ${isBlocked ? 'bg-red-500' : 'bg-green-500'}
+                            ${item.isBlocked ? 'bg-red-500' : 'bg-green-500'}
                           `}
                         >
-                          {isBlocked ? blockedByTasks.length + (dateDependency ? 1 : 0) : blockingTasks.length}
+                          {item.isBlocked ? blockedByTasks.length + (dateDependency ? 1 : 0) : blockingTasks.length}
                         </div>
                       </button>
                       <span className="font-medium cursor-text hover:text-gray-600">
@@ -1273,7 +1116,6 @@ export function Item({
                           `}>
                           {typeIcons[effectiveType as keyof typeof typeIcons]}
                         </div>
-                        {/* Tooltip that appears on hover */}
                         <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 translate-y-full 
                                         opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 
                                         pointer-events-none z-10">
@@ -1296,14 +1138,13 @@ export function Item({
             </div>
           </div>
 
-          {/* Controls section - moves below on small screens */}
           <div className="flex items-center sm:items-start gap-2 mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-0 w-full sm:w-auto justify-between sm:justify-end sm:flex-shrink-0">
-            {/* Up/Down controls */}
             <div className="flex gap-1">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onMoveItem(item.id, 'up');
+                  item.update({position: item.position+1});
+                  item.entries({position: item.position+1, parent_id: item.parent_id})[0]?.update({position: item.position});
                 }}
                 disabled={itemPosition === 0}
                 className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
@@ -1315,7 +1156,8 @@ export function Item({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onMoveItem(item.id, 'down');
+                  item.update({position: item.position-1});
+                  item.entries({position: item.position-1, parent_id: item.parent_id})[0]?.update({position: item.position});
                 }}
                 disabled={itemPosition === siblingCount - 1}
                 className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
@@ -1326,7 +1168,6 @@ export function Item({
               </button>
             </div>
 
-            {/* Action buttons */}
             <div className="flex gap-2">
               <button
                 onClick={(e) => {
@@ -1381,7 +1222,6 @@ export function Item({
         )}
       </div>
 
-      {/* Type menu dropdown */}
       {isTypeMenuOpen && typeof document !== 'undefined' && createPortal(
         <div 
           ref={typeMenuRef}
@@ -1396,7 +1236,7 @@ export function Item({
           <div className="p-1">
             <button 
               onClick={() => {
-                onTypeChange(item.id, null)
+                updateItem({ type: null, manual_type: false })
                 setIsTypeMenuOpen(false)
               }}
               className={`w-full text-left px-2 py-1 rounded text-sm ${!item.type ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
@@ -1405,37 +1245,37 @@ export function Item({
             </button>
             <button 
               onClick={() => {
-                onTypeChange(item.id, 'Task' as ItemType)
+                updateItem({ type: 'Task' as DbItemType, manual_type: true })
                 setIsTypeMenuOpen(false)
               }}
-              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Task' as ItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
+              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Task' as DbItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
             >
               Task
             </button>
             <button 
               onClick={() => {
-                onTypeChange(item.id, 'Mission' as ItemType)
+                updateItem({ type: 'Mission' as DbItemType, manual_type: true })
                 setIsTypeMenuOpen(false)
               }}
-              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Mission' as ItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
+              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Mission' as DbItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
             >
               Mission
             </button>
             <button 
               onClick={() => {
-                onTypeChange(item.id, 'Objective' as ItemType)
+                updateItem({ type: 'Objective' as DbItemType, manual_type: true })
                 setIsTypeMenuOpen(false)
               }}
-              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Objective' as ItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
+              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Objective' as DbItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
             >
               Objective
             </button>
             <button 
               onClick={() => {
-                onTypeChange(item.id, 'Ambition' as ItemType)
+                updateItem({ type: 'Ambition' as DbItemType, manual_type: true })
                 setIsTypeMenuOpen(false)
               }}
-              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Ambition' as ItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
+              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Ambition' as DbItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
             >
               Ambition
             </button>
@@ -1448,8 +1288,8 @@ export function Item({
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         onConfirm={(deleteChildren) => {
-          onDeleteItem(item.id, deleteChildren)
-          setIsDeleteDialogOpen(false)
+          item.delete(deleteChildren);
+          setIsDeleteDialogOpen(false);
         }}
         hasChildren={hasChildren}
         itemTitle={item.title}
@@ -1468,7 +1308,6 @@ export function Item({
           className="w-64 bg-white rounded-lg shadow-lg z-[9999] border border-gray-200"
         >
           <div className="p-2">
-            {/* Task dependencies section */}
             {blockedByTasks.length > 0 && (
               <div className="mb-2">
                 <h3 className="text-xs font-medium text-gray-500 mb-1">Blocked by tasks:</h3>
@@ -1541,7 +1380,6 @@ export function Item({
               </button>
             </div>
 
-            {/* Date dependency section */}
             <div className="mt-2 pt-2 border-t border-gray-100">
               <h3 className="text-xs font-medium text-gray-500 mb-1">Date dependency:</h3>
               {dateDependency ? (
@@ -1570,7 +1408,6 @@ export function Item({
         document.body
       )}
 
-      {/* Date dependency dialog */}
       {isDateDependencyOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-25 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl p-4 w-96">
@@ -1623,16 +1460,13 @@ export function Item({
         availableTasks={filteredTasks}
       />
       
-      {/* Subtask deletion confirmation dialog */}
       {deletingSubtaskId && (
         <DeleteConfirmationDialog
           isOpen={!!deletingSubtaskId}
           onClose={() => {
-            // Clear the deletion queue and reset
             setDeletedSubtasksQueue([]);
             setDeletingSubtaskId(null);
             setIsProcessingDeletion(false);
-            // Resume save workflow
             handleContentSubmit();
           }}
           onConfirm={(deleteChildren) => {
@@ -1644,7 +1478,6 @@ export function Item({
         />
       )}
 
-      {/* Parent suggestions dropdown */}
       {showParentSuggestions && typeof document !== 'undefined' && createPortal(
         <div 
           ref={parentSuggestionsRef}

@@ -5,7 +5,7 @@ import { DndProvider } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
 import { ItemList } from './components/ItemList'
 import { Toolbar } from './components/Toolbar'
-import { supabase, type Database, type ItemType } from '../src/lib/supabase/client'
+import { supabase, type Database } from '../src/lib/supabase/client'
 import { toast } from 'react-hot-toast'
 
 type Item = Database['public']['Tables']['items']['Row']
@@ -21,11 +21,11 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'tree' | 'list'>('tree')
-  const [completionFilter, setCompletionFilter] = useState<'all' | 'completed' | 'not-completed'>('not-completed')
+  const [completionFilter, setCompletionFilter] = useState<'all' | 'complete' | 'incomplete'>('incomplete')
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [showOnlyActionable, setShowOnlyActionable] = useState(false)
   const [showOnlyBlocked, setShowOnlyBlocked] = useState(false)
-  const [childCount] = useState<Record<string, number>>({})
+  const [childCount] = useState<Map<string, number>>(new Map())
 
   useEffect(() => {
     const fetchUserAndData = async () => {
@@ -271,98 +271,6 @@ export default function Home() {
     }
   }
 
-  const handleTypeChange = async (id: string, type: ItemType | null) => {
-    try {
-      if (!userId) {
-        throw new Error('No user logged in')
-      }
-
-      const { error } = await supabase
-        .from('items')
-        .update({ 
-          type,
-          manual_type: type !== null,
-          user_id: userId
-        })
-        .eq('id', id)
-
-      if (error) throw error
-
-      setItems(prev =>
-        prev.map(item =>
-          item.id === id
-            ? { ...item, type, manual_type: type !== null }
-            : item
-        )
-      )
-      setError(null)
-    } catch (error) {
-      console.error('Error updating item type:', error)
-      setError(error instanceof Error ? error.message : 'Failed to update item type')
-    }
-  }
-
-  const handleMoveItem = async (id: string, direction: 'up' | 'down') => {
-    try {
-      if (!userId) {
-        throw new Error('No user logged in')
-      }
-
-      // Find the item and its siblings
-      const item = items.find(i => i.id === id)
-      if (!item) return
-
-      const siblings = items.filter(i => i.parent_id === item.parent_id)
-      siblings.sort((a, b) => a.position - b.position)
-      
-      const currentIndex = siblings.findIndex(i => i.id === id)
-      if (currentIndex === -1) return
-
-      // Calculate new positions
-      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
-      if (targetIndex < 0 || targetIndex >= siblings.length) return
-
-      const targetItem = siblings[targetIndex]
-      const currentPosition = item.position
-      const targetPosition = targetItem.position
-
-      // Update positions in database
-      const { error: updateError } = await supabase
-        .from('items')
-        .update({ 
-          position: targetPosition,
-          user_id: userId
-        })
-        .eq('id', id)
-
-      if (updateError) throw updateError
-
-      const { error: updateError2 } = await supabase
-        .from('items')
-        .update({ 
-          position: currentPosition,
-          user_id: userId
-        })
-        .eq('id', targetItem.id)
-
-      if (updateError2) throw updateError2
-
-      // Update local state
-      setItems(prev =>
-        prev.map(i => {
-          if (i.id === id) return { ...i, position: targetPosition }
-          if (i.id === targetItem.id) return { ...i, position: currentPosition }
-          return i
-        })
-      )
-
-      setError(null)
-    } catch (error) {
-      console.error('Error moving item:', error)
-      setError(error instanceof Error ? error.message : 'Failed to move item')
-    }
-  }
-
   const handleMoveItemToPosition = async (itemId: string, newPosition: number, parentId: string | null) => {
     try {
       if (!userId) {
@@ -493,79 +401,6 @@ export default function Home() {
     } catch (error) {
       console.error('Error updating item:', error)
       setError(error instanceof Error ? error.message : 'Failed to update item')
-    }
-  }
-
-  const handleDeleteItem = async (id: string, deleteChildren: boolean) => {
-    try {
-      if (!userId) {
-        throw new Error('No user logged in')
-      }
-
-      const item = items.find(i => i.id === id)
-      if (!item) return
-
-      if (deleteChildren) {
-        // Delete the item and all its descendants
-        const descendantIds = new Set<string>()
-        const queue = [id]
-
-        // Build a set of all descendant IDs using BFS
-        while (queue.length > 0) {
-          const currentId = queue.shift()!
-          descendantIds.add(currentId)
-          
-          const children = items.filter(i => i.parent_id === currentId)
-          queue.push(...children.map(c => c.id))
-        }
-
-        // Delete all descendants
-        const { error } = await supabase
-          .from('items')
-          .delete()
-          .in('id', Array.from(descendantIds))
-          .eq('user_id', userId)
-
-        if (error) throw error
-
-        // Update local state
-        setItems(prev => prev.filter(i => !descendantIds.has(i.id)))
-      } else {
-        // Delete the item and promote its children
-        const children = items.filter(i => i.parent_id === id)
-        
-        // Update children's parent_id to the deleted item's parent_id
-        if (children.length > 0) {
-          const { error: updateError } = await supabase
-            .from('items')
-            .update({ parent_id: item.parent_id })
-            .in('id', children.map(c => c.id))
-            .eq('user_id', userId)
-
-          if (updateError) throw updateError
-        }
-
-        // Delete the item
-        const { error: deleteError } = await supabase
-          .from('items')
-          .delete()
-          .eq('id', id)
-          .eq('user_id', userId)
-
-        if (deleteError) throw deleteError
-
-        // Update local state
-        setItems(prev => prev.map(i => 
-          i.parent_id === id 
-            ? { ...i, parent_id: item.parent_id }
-            : i
-        ).filter(i => i.id !== id))
-      }
-
-      setError(null)
-    } catch (error) {
-      console.error('Error deleting item:', error)
-      setError(error instanceof Error ? error.message : 'Failed to delete item')
     }
   }
 
@@ -963,15 +798,15 @@ export default function Home() {
           />
           <ItemList
             items={items}
+            setItems={setItems}
             dependencies={dependencies}
+            setDependencies={setDependencies}
             dateDependencies={dateDependencies}
+            setDateDependencies={setDateDependencies}
             onAddChild={handleAddChild}
             onToggleComplete={handleToggleComplete}
-            onTypeChange={handleTypeChange}
-            onMoveItem={handleMoveItem}
             onMoveItemToPosition={handleMoveItemToPosition}
             onUpdateItem={handleUpdateItem}
-            onDeleteItem={handleDeleteItem}
             onFocus={setFocusedItemId}
             onAddDependency={handleAddDependency}
             onRemoveDependency={handleRemoveDependency}

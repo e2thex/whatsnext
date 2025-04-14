@@ -1,13 +1,27 @@
 import { useMemo, useCallback, type ReactNode, useEffect, useState } from 'react'
-import { Item } from './Item'
+import { Item as ItemComponent } from './Item'
 import { useDrop } from 'react-dnd'
-import { type Database, type ItemType } from '../../src/lib/supabase/client'
+import { type Database } from '../../src/lib/supabase/client'
 import { Breadcrumb } from './Breadcrumb'
 import { useDragDropManager } from 'react-dnd'
+import { entry } from '@/src/app/Entry'
+import { Item, SubItem, Dependencies } from '@/app/components/types'
 
 type ItemRow = Database['public']['Tables']['items']['Row']
 type TaskDependencyRow = Database['public']['Tables']['task_dependencies']['Row']
 type DateDependencyRow = Database['public']['Tables']['date_dependencies']['Row']
+
+// Helper function to create a fallback item when entry returns null
+const createFallbackItem = (dbItem: ItemRow): Item => ({
+  ...dbItem,
+  dependencies: [] as Dependencies,
+  subItems: [] as SubItem[],
+  isCollapsed: false,
+  isBlocked: false,
+  blockedCount: 0,
+  blocking: [],
+  update: (partial: Partial<Item>): Item => ({ ...dbItem, ...partial } as Item)
+});
 
 interface DragItem {
   id: string
@@ -77,15 +91,15 @@ function DropZone({ parentId, position, onMoveItemToPosition, isAnyItemEditing =
 
 export interface ItemListProps {
   items: ItemRow[]
+  setItems: React.Dispatch<React.SetStateAction<ItemRow[]>>
   dependencies: TaskDependencyRow[]
+  setDependencies: React.Dispatch<React.SetStateAction<TaskDependencyRow[]>>
   dateDependencies: DateDependencyRow[]
+  setDateDependencies: React.Dispatch<React.SetStateAction<DateDependencyRow[]>>
   onAddChild: (parentId: string | null) => void
   onToggleComplete: (id: string) => void
-  onTypeChange: (id: string, type: ItemType | null) => void
-  onMoveItem: (id: string, direction: 'up' | 'down') => void
   onMoveItemToPosition: (itemId: string, newPosition: number, parentId: string | null) => void
   onUpdateItem: (id: string, updates: { title?: string; description?: string }) => void
-  onDeleteItem: (id: string, deleteChildren: boolean) => void
   onFocus: (id: string | null) => void
   onAddDependency: (blockingTaskId: string, blockedTaskId: string) => void
   onRemoveDependency: (blockingTaskId: string, blockedTaskId: string) => void
@@ -93,28 +107,27 @@ export interface ItemListProps {
   onRemoveDateDependency: (taskId: string) => void
   createSubtask: (parentId: string, title: string, position: number) => void
   reorderSubtasks: (parentId: string, subtaskIds: string[]) => void
-  onChangeParent?: (itemId: string, newParentId: string | null) => void
+  onUpdateSubtask: (subtaskId: string, updates: { title: string; position: number }) => void
+ 
   focusedItemId: string | null
-  viewMode: 'tree' | 'list'
+  viewMode: 'list' | 'tree'
   showOnlyActionable: boolean
   showOnlyBlocked: boolean
-  completionFilter: 'all' | 'completed' | 'not-completed'
+  completionFilter: 'all' | 'complete' | 'incomplete'
   searchQuery: string
-  childCount?: Record<string, number>
-  onUpdateSubtask?: (subtaskId: string, updates: { title: string; position: number }) => void
+  childCount: Map<string, number>
 }
 
 export function ItemList({ 
   items, 
+  setItems,
   dependencies,
+  setDependencies,
   dateDependencies,
+  setDateDependencies,
   onAddChild, 
   onToggleComplete, 
-  onTypeChange, 
-  onMoveItem, 
   onMoveItemToPosition,
-  onUpdateItem,
-  onDeleteItem,
   onFocus,
   onAddDependency,
   onRemoveDependency,
@@ -122,14 +135,14 @@ export function ItemList({
   onRemoveDateDependency,
   createSubtask,
   reorderSubtasks,
-  onChangeParent,
+  onUpdateSubtask,
   focusedItemId,
   viewMode,
   showOnlyActionable,
   showOnlyBlocked,
   completionFilter,
   searchQuery,
-  onUpdateSubtask
+  childCount
 }: ItemListProps) {
   const [isAnyItemEditing, setIsAnyItemEditing] = useState(false);
 
@@ -290,8 +303,8 @@ export function ItemList({
                           (showOnlyBlocked && blocked); // Show only blocked
       
       const completionFilterResult = completionFilter === 'all' || 
-                                    (completionFilter === 'completed' && item.completed) ||
-                                    (completionFilter === 'not-completed' && !item.completed);
+                                    (completionFilter === 'complete' && item.completed) ||
+                                    (completionFilter === 'incomplete' && !item.completed);
       
       return blockFilter && completionFilterResult;
     })
@@ -304,6 +317,17 @@ export function ItemList({
     sortedItems.forEach((item, index) => {
       const childItems = itemsByParent.get(item.id) || []
       const hasChildren = childItems.length > 0
+      
+      // Enhance the raw item with required properties
+      const enhancedItem = entry({
+        id: item.id, 
+        items, 
+        setItems,
+        taskDependencies: dependencies, 
+        setTaskDependencies: setDependencies,
+        dateDependencies,
+        setDateDependencies
+      }) || createFallbackItem(item);
 
       // Recursively render children
       const itemChildren = hasChildren ? (
@@ -320,14 +344,10 @@ export function ItemList({
             onMoveItemToPosition={onMoveItemToPosition}
             isAnyItemEditing={isAnyItemEditing}
           />
-          <Item
-            item={item}
+          <ItemComponent
+            item={enhancedItem}
             onAddChild={onAddChild}
             onToggleComplete={onToggleComplete}
-            onTypeChange={onTypeChange}
-            onMoveItem={onMoveItem}
-            onUpdateItem={onUpdateItem}
-            onDeleteItem={onDeleteItem}
             onFocus={onFocus}
             onAddDependency={onAddDependency}
             onRemoveDependency={onRemoveDependency}
@@ -335,9 +355,7 @@ export function ItemList({
             onRemoveDateDependency={onRemoveDateDependency}
             onCreateSubtask={createSubtask}
             onUpdateSubtask={onUpdateSubtask}
-            onReorderSubtasks={reorderSubtasks}
             onEditingChange={(isEditing) => setIsAnyItemEditing(isEditing)}
-            onChangeParent={onChangeParent}
             siblingCount={childItems.length}
             itemPosition={index}
             hasChildren={hasChildren}
@@ -345,8 +363,17 @@ export function ItemList({
             blockingTasks={dependenciesByTask.blocking.get(item.id) || []}
             blockedByTasks={dependenciesByTask.blockedBy.get(item.id) || []}
             dateDependency={dateDependencies.find(dep => dep.task_id === item.id)}
-            availableTasks={items}
-            childrenBlocked={hasChildren && areAllChildrenBlocked(item.id)}
+            availableTasks={items.map(i => {
+              return entry({
+                id: i.id, 
+                items, 
+                setItems,
+                taskDependencies: dependencies, 
+                setTaskDependencies: setDependencies,
+                dateDependencies,
+                setDateDependencies
+              }) || createFallbackItem(i);
+            })}
             isSearchMatch={
               !!searchQuery.trim() && 
               searchMatchingItemIds.has(item.id) && 
@@ -358,7 +385,7 @@ export function ItemList({
             searchQuery={searchQuery}
           >
             {itemChildren}
-          </Item>
+          </ItemComponent>
           {index === sortedItems.length - 1 && (
             <DropZone
               parentId={item.parent_id}
@@ -447,8 +474,8 @@ export function ItemList({
                           (showOnlyBlocked && blocked); // Show only blocked
       
       const completionFilterResult = completionFilter === 'all' || 
-                                    (completionFilter === 'completed' && item.completed) ||
-                                    (completionFilter === 'not-completed' && !item.completed);
+                                    (completionFilter === 'complete' && item.completed) ||
+                                    (completionFilter === 'incomplete' && !item.completed);
       
       return blockFilter && completionFilterResult;
     });
@@ -523,17 +550,37 @@ export function ItemList({
               ? getPathBetweenItems(focusedItemId, task.id).slice(1, -1) // Show path between focused item and task
               : []
 
+          // Enhance the raw task with required properties
+          const enhancedTask = entry({
+            id: task.id, 
+            items, 
+            setItems,
+            taskDependencies: dependencies,
+            setTaskDependencies: setDependencies,
+            dateDependencies,
+            setDateDependencies
+          }) || createFallbackItem(task);
+          
+          // Enhance breadcrumb items
+          const enhancedBreadcrumbs = breadcrumbs.map(item => {
+            return entry({
+              id: item.id, 
+              items, 
+              setItems,
+              taskDependencies: dependencies,
+              setTaskDependencies: setDependencies,
+              dateDependencies,
+              setDateDependencies
+            }) || createFallbackItem(item);
+          });
+
           return (
             <div key={task.id} className="py-0.5">
               <div className="bg-white rounded">
-                <Item
-                  item={task}
+                <ItemComponent
+                  item={enhancedTask}
                   onAddChild={onAddChild}
                   onToggleComplete={onToggleComplete}
-                  onTypeChange={onTypeChange}
-                  onMoveItem={onMoveItem}
-                  onUpdateItem={onUpdateItem}
-                  onDeleteItem={onDeleteItem}
                   onFocus={onFocus}
                   onAddDependency={onAddDependency}
                   onRemoveDependency={onRemoveDependency}
@@ -541,9 +588,7 @@ export function ItemList({
                   onRemoveDateDependency={onRemoveDateDependency}
                   onCreateSubtask={createSubtask}
                   onUpdateSubtask={onUpdateSubtask}
-                  onReorderSubtasks={reorderSubtasks}
                   onEditingChange={(isEditing) => setIsAnyItemEditing(isEditing)}
-                  onChangeParent={onChangeParent}
                   siblingCount={1}
                   itemPosition={index}
                   hasChildren={false}
@@ -551,8 +596,17 @@ export function ItemList({
                   blockingTasks={dependenciesByTask.blocking.get(task.id) || []}
                   blockedByTasks={dependenciesByTask.blockedBy.get(task.id) || []}
                   dateDependency={dateDependencies.find(dep => dep.task_id === task.id)}
-                  availableTasks={items}
-                  childrenBlocked={false}
+                  availableTasks={items.map(i => {
+                    return entry({
+                      id: i.id, 
+                      items, 
+                      setItems,
+                      taskDependencies: dependencies,
+                      setTaskDependencies: setDependencies,
+                      dateDependencies,
+                      setDateDependencies
+                    }) || createFallbackItem(i);
+                  })}
                   isSearchMatch={
                     !!searchQuery.trim() && 
                     searchMatchingItemIds.has(task.id) && 
@@ -562,7 +616,7 @@ export function ItemList({
                     )
                   }
                   searchQuery={searchQuery}
-                  breadcrumbs={breadcrumbs}
+                  breadcrumbs={enhancedBreadcrumbs}
                   onNavigate={onFocus}
                 />
               </div>
@@ -599,6 +653,17 @@ export function ItemList({
 
                 const childItems = itemsByParent.get(focusedItem.id) || [];
                 const hasChildren = childItems.length > 0;
+                
+                // Enhance the focused item
+                const enhancedFocusedItem = entry({
+                  id: focusedItem.id, 
+                  items, 
+                  setItems,
+                  taskDependencies: dependencies,
+                  setTaskDependencies: setDependencies,
+                  dateDependencies,
+                  setDateDependencies
+                }) || createFallbackItem(focusedItem);
 
                 // Recursively render children
                 const itemChildren = hasChildren ? (
@@ -609,14 +674,10 @@ export function ItemList({
 
                 return (
                   <div key={focusedItem.id} className="py-0.5">
-                    <Item
-                      item={focusedItem}
+                    <ItemComponent
+                      item={enhancedFocusedItem}
                       onAddChild={onAddChild}
                       onToggleComplete={onToggleComplete}
-                      onTypeChange={onTypeChange}
-                      onMoveItem={onMoveItem}
-                      onUpdateItem={onUpdateItem}
-                      onDeleteItem={onDeleteItem}
                       onFocus={onFocus}
                       onAddDependency={onAddDependency}
                       onRemoveDependency={onRemoveDependency}
@@ -624,9 +685,7 @@ export function ItemList({
                       onRemoveDateDependency={onRemoveDateDependency}
                       onCreateSubtask={createSubtask}
                       onUpdateSubtask={onUpdateSubtask}
-                      onReorderSubtasks={reorderSubtasks}
                       onEditingChange={(isEditing) => setIsAnyItemEditing(isEditing)}
-                      onChangeParent={onChangeParent}
                       siblingCount={childItems.length}
                       itemPosition={0}
                       hasChildren={hasChildren}
@@ -634,13 +693,22 @@ export function ItemList({
                       blockingTasks={dependenciesByTask.blocking.get(focusedItem.id) || []}
                       blockedByTasks={dependenciesByTask.blockedBy.get(focusedItem.id) || []}
                       dateDependency={dateDependencies.find(dep => dep.task_id === focusedItem.id)}
-                      availableTasks={items}
-                      childrenBlocked={hasChildren && areAllChildrenBlocked(focusedItem.id)}
+                      availableTasks={items.map(i => {
+                        return entry({
+                          id: i.id, 
+                          items, 
+                          setItems,
+                          taskDependencies: dependencies,
+                          setTaskDependencies: setDependencies,
+                          dateDependencies,
+                          setDateDependencies
+                        }) || createFallbackItem(i);
+                      })}
                       isSearchMatch={false}
                       searchQuery={searchQuery}
                     >
                       {itemChildren}
-                    </Item>
+                    </ItemComponent>
                   </div>
                 );
               })()}
