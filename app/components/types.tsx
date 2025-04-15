@@ -22,6 +22,7 @@ export type Item = ItemRow & {
     blocking: TaskDependencyRow[],
     update: (partial: Partial<Item>) => Item,
     delete: (deleteChildren: boolean) => void,
-    entry: (partial: Partial<ItemRow>) => Item | null,
+    entry: (partial: Partial<ItemRow> & {isNew?:boolean}) => Item | null,
+    create: (partial: Partial<ItemRow>) => Item,
     entries: (partial: Partial<ItemRow>) => Item[]
   }

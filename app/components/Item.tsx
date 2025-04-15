@@ -769,16 +769,9 @@ export function Item({
     console.log('Processing subtasks', subtasks);
     subtasks.forEach(subtask => {
       if (!subtask.id) {
-        if (onCreateSubtask) {
-          onCreateSubtask(item.id, subtask.title, subtask.position);
-        }
+        item.create({title: subtask.title, parent_id: item.id, position: subtask.position});
       } else {
-        if (onUpdateSubtask) {
-          onUpdateSubtask(subtask.id, { 
-            title: subtask.title, 
-            position: subtask.position 
-          });
-        }
+        item.entry({id:subtask.id})?.update({title: subtask.title, position: subtask.position});  
       }
     });
   };
@@ -817,7 +810,7 @@ export function Item({
 
   const handleDeleteSubtaskConfirmed = (deleteChildren: boolean) => {
     if (deletingSubtaskId) {
-      item.entry(deletingSubtaskId)?.delete(deleteChildren);
+      item.entry({id:deletingSubtaskId})?.delete(deleteChildren);
       
       const updatedQueue = deletedSubtasksQueue.filter(s => s.id !== deletingSubtaskId);
       setDeletedSubtasksQueue(updatedQueue);

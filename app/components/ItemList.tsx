@@ -5,23 +5,11 @@ import { type Database } from '../../src/lib/supabase/client'
 import { Breadcrumb } from './Breadcrumb'
 import { useDragDropManager } from 'react-dnd'
 import { entry } from '@/src/app/Entry'
-import { Item, SubItem, Dependencies } from '@/app/components/types'
+import { Item } from '@/app/components/types'
 
 type ItemRow = Database['public']['Tables']['items']['Row']
 type TaskDependencyRow = Database['public']['Tables']['task_dependencies']['Row']
 type DateDependencyRow = Database['public']['Tables']['date_dependencies']['Row']
-
-// Helper function to create a fallback item when entry returns null
-const createFallbackItem = (dbItem: ItemRow): Item => ({
-  ...dbItem,
-  dependencies: [] as Dependencies,
-  subItems: [] as SubItem[],
-  isCollapsed: false,
-  isBlocked: false,
-  blockedCount: 0,
-  blocking: [],
-  update: (partial: Partial<Item>): Item => ({ ...dbItem, ...partial } as Item)
-});
 
 interface DragItem {
   id: string
@@ -115,7 +103,6 @@ export interface ItemListProps {
   showOnlyBlocked: boolean
   completionFilter: 'all' | 'complete' | 'incomplete'
   searchQuery: string
-  childCount: Map<string, number>
 }
 
 export function ItemList({ 
@@ -134,15 +121,13 @@ export function ItemList({
   onAddDateDependency,
   onRemoveDateDependency,
   createSubtask,
-  reorderSubtasks,
   onUpdateSubtask,
   focusedItemId,
   viewMode,
   showOnlyActionable,
   showOnlyBlocked,
   completionFilter,
-  searchQuery,
-  childCount
+  searchQuery
 }: ItemListProps) {
   const [isAnyItemEditing, setIsAnyItemEditing] = useState(false);
 
@@ -318,23 +303,28 @@ export function ItemList({
       const childItems = itemsByParent.get(item.id) || []
       const hasChildren = childItems.length > 0
       
-      // Enhance the raw item with required properties
+      // Get the enhanced item
       const enhancedItem = entry({
-        id: item.id, 
+        partial: {id: item.id}, 
         items, 
         setItems,
         taskDependencies: dependencies, 
         setTaskDependencies: setDependencies,
         dateDependencies,
         setDateDependencies
-      }) || createFallbackItem(item);
+      });
+      
+      // Skip rendering if we couldn't enhance the item
+      if (!enhancedItem) {
+        return; // Skip this item
+      }
 
-      // Recursively render children
+      // Continue with rendering as before
       const itemChildren = hasChildren ? (
         <div className="space-y-0.5">
           {renderTreeView(item.id)}
         </div>
-      ) : null
+      ) : null;
 
       content.push(
         <div key={item.id} className="py-0.5">
@@ -365,14 +355,14 @@ export function ItemList({
             dateDependency={dateDependencies.find(dep => dep.task_id === item.id)}
             availableTasks={items.map(i => {
               return entry({
-                id: i.id, 
+                partial: {id: i.id}, 
                 items, 
                 setItems,
                 taskDependencies: dependencies, 
                 setTaskDependencies: setDependencies,
                 dateDependencies,
                 setDateDependencies
-              }) || createFallbackItem(i);
+              })!; // Safe to use ! here
             })}
             isSearchMatch={
               !!searchQuery.trim() && 
@@ -552,27 +542,33 @@ export function ItemList({
 
           // Enhance the raw task with required properties
           const enhancedTask = entry({
-            id: task.id, 
+            partial: {id: task.id}, 
             items, 
             setItems,
             taskDependencies: dependencies,
             setTaskDependencies: setDependencies,
             dateDependencies,
             setDateDependencies
-          }) || createFallbackItem(task);
+          });
+          
+          if (!enhancedTask) {
+            return null; // Skip this task if it can't be enhanced
+          }
           
           // Enhance breadcrumb items
-          const enhancedBreadcrumbs = breadcrumbs.map(item => {
-            return entry({
-              id: item.id, 
-              items, 
-              setItems,
-              taskDependencies: dependencies,
-              setTaskDependencies: setDependencies,
-              dateDependencies,
-              setDateDependencies
-            }) || createFallbackItem(item);
-          });
+          const enhancedBreadcrumbs = breadcrumbs
+            .map(item => {
+              return entry({
+                partial: {id: item.id}, 
+                items, 
+                setItems,
+                taskDependencies: dependencies,
+                setTaskDependencies: setDependencies,
+                dateDependencies,
+                setDateDependencies
+              });
+            })
+            .filter((item): item is Item => item !== null);
 
           return (
             <div key={task.id} className="py-0.5">
@@ -596,16 +592,28 @@ export function ItemList({
                   blockingTasks={dependenciesByTask.blocking.get(task.id) || []}
                   blockedByTasks={dependenciesByTask.blockedBy.get(task.id) || []}
                   dateDependency={dateDependencies.find(dep => dep.task_id === task.id)}
-                  availableTasks={items.map(i => {
-                    return entry({
-                      id: i.id, 
+                  availableTasks={items.filter(i => {
+                    const enhancedItemForAvailable = entry({
+                      partial: {id: i.id}, 
                       items, 
                       setItems,
                       taskDependencies: dependencies,
                       setTaskDependencies: setDependencies,
                       dateDependencies,
                       setDateDependencies
-                    }) || createFallbackItem(i);
+                    });
+                    return enhancedItemForAvailable !== null;
+                  }).map(i => {
+                    // We already filtered out nulls above
+                    return entry({
+                      partial: {id: i.id}, 
+                      items, 
+                      setItems,
+                      taskDependencies: dependencies,
+                      setTaskDependencies: setDependencies,
+                      dateDependencies,
+                      setDateDependencies
+                    })!; // Safe to use ! here
                   })}
                   isSearchMatch={
                     !!searchQuery.trim() && 
@@ -656,14 +664,18 @@ export function ItemList({
                 
                 // Enhance the focused item
                 const enhancedFocusedItem = entry({
-                  id: focusedItem.id, 
+                  partial: {id: focusedItem.id}, 
                   items, 
                   setItems,
                   taskDependencies: dependencies,
                   setTaskDependencies: setDependencies,
                   dateDependencies,
                   setDateDependencies
-                }) || createFallbackItem(focusedItem);
+                });
+                
+                if (!enhancedFocusedItem) {
+                  return null; // Skip rendering if we couldn't enhance the focused item
+                }
 
                 // Recursively render children
                 const itemChildren = hasChildren ? (
@@ -693,16 +705,28 @@ export function ItemList({
                       blockingTasks={dependenciesByTask.blocking.get(focusedItem.id) || []}
                       blockedByTasks={dependenciesByTask.blockedBy.get(focusedItem.id) || []}
                       dateDependency={dateDependencies.find(dep => dep.task_id === focusedItem.id)}
-                      availableTasks={items.map(i => {
-                        return entry({
-                          id: i.id, 
+                      availableTasks={items.filter(i => {
+                        const enhancedItemForAvailable = entry({
+                          partial: {id: i.id}, 
                           items, 
                           setItems,
                           taskDependencies: dependencies,
                           setTaskDependencies: setDependencies,
                           dateDependencies,
                           setDateDependencies
-                        }) || createFallbackItem(i);
+                        });
+                        return enhancedItemForAvailable !== null;
+                      }).map(i => {
+                        // We already filtered out nulls above
+                        return entry({
+                          partial: {id: i.id}, 
+                          items, 
+                          setItems,
+                          taskDependencies: dependencies,
+                          setTaskDependencies: setDependencies,
+                          dateDependencies,
+                          setDateDependencies
+                        })!; // Safe to use ! here
                       })}
                       isSearchMatch={false}
                       searchQuery={searchQuery}

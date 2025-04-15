@@ -37,7 +37,7 @@ const updateItemInDatabase = async (
 };
 
 export interface EntryProps {
-  partial: Partial<DBItem> & {isNew?:boolean};
+  partial: Partial<DBItem>;
   items: DBItem[];
   setItems: React.Dispatch<React.SetStateAction<DBItem[]>>;
   taskDependencies: TaskDependency[];
@@ -56,10 +56,8 @@ export const entry = ({
   setDateDependencies
 }: EntryProps): Item | null => {
 
-  // Find the first item in the items array that matches all properties in partial
-  const dbItem = partial.isNew 
-  ?  newItem({partial, items, setItems, taskDependencies, setTaskDependencies, dateDependencies, setDateDependencies})
-  :items.find(item => 
+  // Find the first item in the items.');
+  const dbItem = items.find(item => 
     Object.entries(partial).every(([key, value]) => 
       item[key as keyof DBItem] === value
     )
@@ -101,6 +99,7 @@ export const entry = ({
     },
     delete: (deleteChildren: boolean) => handleDeleteItem(dbItem, deleteChildren, setItems, items),
     entry: (partial: Partial<DBItem>) => entry({partial, items, setItems, taskDependencies, setTaskDependencies, dateDependencies, setDateDependencies}),
+    create: (partial: Partial<DBItem>) => newItem({partial, items, setItems, taskDependencies, setTaskDependencies, dateDependencies, setDateDependencies}),
     entries: (partial: Partial<DBItem>) => entries({partial, items, setItems, taskDependencies, setTaskDependencies, dateDependencies, setDateDependencies})
   }
 
