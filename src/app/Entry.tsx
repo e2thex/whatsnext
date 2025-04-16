@@ -5,35 +5,101 @@ type DBItem = Database['public']['Tables']['items']['Row']
 type TaskDependency = Database['public']['Tables']['task_dependencies']['Row']
 type DateDependency = Database['public']['Tables']['date_dependencies']['Row']
 
+type TaskDependencyData = {
+  id: string;
+  blocking_task_id: string;
+  blocked_task_id: string;
+  user_id: string;
+};
+
+type DateDependencyData = {
+  id: string;
+  task_id: string;
+  unblock_at: string;
+  user_id: string;
+};
+
+type Dependency = {
+  type: 'Task';
+  data: TaskDependencyData;
+} | {
+  type: 'Date';
+  data: DateDependencyData;
+};
+
 type DB = {
   create: (partial: Partial<Item>) => Promise<Item|null>,
   entries: (partial: Partial<Item>) => Item[],
-  entry: (partial: Partial<Item>) => Item,
+  entry: (partial: Partial<Item>) => Item | undefined,
   delete: (partial: Partial<Item>, deleteChildren: boolean) => Promise<void>,
-  update: (id: string, updates: Partial<Item>) => Promise<Item|null>,
+  update: (item: Item, updates: Partial<Item>) => Promise<Item|null>,
   setEntries: (entries: Item[]) => void,
+  userId: string,
 }
 export const populateEntries = async (db:DB) => {
     const { data: items, error: itemsError } = await supabase
         .from('items')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', db.userId)
     
     const { data: dependenciesData, error: dependenciesError } = await supabase
       .from('task_dependencies')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', db.userId)
 
     const { data: dateDependenciesData, error: dateDependenciesError } = await supabase
       .from('date_dependencies')
       .select('*')
-      .eq('user_id', userId)
-  const entries = items.map(item => entityFactory({item, items, dependenciesData, dateDependenciesData}))
-  db.setEntries(entries);
+      .eq('user_id', db.userId)
+
+    if (itemsError || dependenciesError || dateDependenciesError) {
+      console.error('Error populating entries:', { itemsError, dependenciesError, dateDependenciesError });
+      return;
+    }
+
+    if (!items) {
+      console.error('No items found for user:', db.userId);
+      return;
+    }
+
+    const entries = items.map(item => entityFactory({
+      item, 
+      items, 
+      taskDependencies: dependenciesData as TaskDependency[], 
+      dateDependencies: dateDependenciesData as DateDependency[],
+      db: db as unknown as DB
+    }))
+    db.setEntries(entries);
 }
-export const db = ({entries, setEntries}: {entries: Item[], setEntries: React.Dispatch<React.SetStateAction<Item[]>>}):DB => {
+export const db = ({entries, setEntries, userId}: {entries: Item[], setEntries: React.Dispatch<React.SetStateAction<Item[]>>, userId: string}):DB => {
   const db = {
-    create: (partial: Partial<Item>) => Promise.resolve(null),
+    create: async (partial: Partial<Item>) => {
+      try {
+        const { data, error } = await supabase
+          .from('items')
+          .insert({ ...partial, user_id: userId })
+          .select()
+          .single();
+        
+        if (error) {
+          console.error('Error creating item:', error);
+          return null;
+        }
+        // TODO: Decide if we should pass the real taskDependencies and dateDependencies to the entityFactory
+        const newItem = entityFactory({
+          item: data, 
+          items: entries, 
+          taskDependencies: [], 
+          dateDependencies: [],
+          db: db as unknown as DB
+        });
+        setEntries([...entries, newItem]);
+        return newItem;
+      } catch (error) {
+        console.error('Error creating item:', error);
+        return null;
+      }
+    },
     entries: (partial: Partial<Item>) => (
       entries
       .filter(i => Object.keys(partial).every(key => i[key as keyof DBItem] === partial[key as keyof DBItem]))
@@ -41,8 +107,25 @@ export const db = ({entries, setEntries}: {entries: Item[], setEntries: React.Di
     entry: (partial: Partial<Item>) => (
       entries
       .find(i => Object.keys(partial).every(key => i[key as keyof DBItem] === partial[key as keyof DBItem]))
-  ),
-    delete: (partial: Partial<Item>, deleteChildren: boolean) => Promise.resolve(),
+    ),
+    delete: async (partial: Partial<Item>, deleteChildren: boolean) => {
+      try {
+        const { error } = await supabase
+          .from('items')
+          .delete()
+          .eq('id', partial.id)
+          .eq('user_id', userId);
+        
+        if (error) {
+          console.error('Error deleting item:', error);
+          return;
+        }
+        
+        setEntries(entries.filter(i => i.id !== partial.id));
+      } catch (error) {
+        console.error('Error deleting item:', error);
+      }
+    },
     update: (item: Item, updates: Partial<Item>):Promise<Item|null> => {
       return new Promise(async (resolve) => {
         try {
@@ -55,7 +138,17 @@ export const db = ({entries, setEntries}: {entries: Item[], setEntries: React.Di
           // Handle regular item updates
           const dbItemChanges = whatChanged(item, updates);
           if (Object.keys(dbItemChanges).length > 0) {
-            await updateItemInDatabase(item, dbItemChanges);
+            const { error: updateError } = await supabase
+              .from('items')
+              .update(dbItemChanges)
+              .eq('id', item.id)
+              .eq('user_id', userId);
+              
+            if (updateError) {
+              console.error('Error updating item:', updateError);
+              resolve(null);
+              return;
+            }
           }
 
           // Handle dependency changes if blockedBy array changed
@@ -81,35 +174,59 @@ export const db = ({entries, setEntries}: {entries: Item[], setEntries: React.Di
             // Process task dependencies
             for (const dep of dependenciesToAdd) {
               if (dep.type === 'Task') {
-                await supabase
+                const { error: taskDepError } = await supabase
                   .from('task_dependencies')
                   .insert({
-                    blocking_task_id: dep.data.blocking_task_id,
+                    blocking_task_id: (dep.data as TaskDependencyData).blocking_task_id,
                     blocked_task_id: item.id,
+                    user_id: userId
                   });
+                if (taskDepError) {
+                  console.error('Error adding task dependency:', taskDepError);
+                  resolve(null);
+                  return;
+                }
               } else if (dep.type === 'Date') {
-                await supabase
+                const { error: dateDepError } = await supabase
                   .from('date_dependencies')
                   .upsert({
                     task_id: item.id,
-                    unblock_at: dep.data.unblock_at,
+                    unblock_at: (dep.data as DateDependencyData).unblock_at,
+                    user_id: userId
                   });
+                if (dateDepError) {
+                  console.error('Error adding date dependency:', dateDepError);
+                  resolve(null);
+                  return;
+                }
               }
             }
 
             // Remove dependencies
             for (const dep of dependenciesToRemove) {
               if (dep.type === 'Task') {
-                await supabase
+                const { error: taskDepError } = await supabase
                   .from('task_dependencies')
                   .delete()
-                  .eq('blocking_task_id', dep.data.blocking_task_id)
-                  .eq('blocked_task_id', item.id);
+                  .eq('blocking_task_id', (dep.data as TaskDependencyData).blocking_task_id)
+                  .eq('blocked_task_id', item.id)
+                  .eq('user_id', userId);
+                if (taskDepError) {
+                  console.error('Error removing task dependency:', taskDepError);
+                  resolve(null);
+                  return;
+                }
               } else if (dep.type === 'Date') {
-                await supabase
+                const { error: dateDepError } = await supabase
                   .from('date_dependencies')
                   .delete()
-                  .eq('task_id', item.id);
+                  .eq('task_id', item.id)
+                  .eq('user_id', userId);
+                if (dateDepError) {
+                  console.error('Error removing date dependency:', dateDepError);
+                  resolve(null);
+                  return;
+                }
               }
             }
           }
@@ -125,7 +242,7 @@ export const db = ({entries, setEntries}: {entries: Item[], setEntries: React.Di
           if (updates.blockedBy) {
             updates.blockedBy.forEach(dep => {
               if (dep.type === 'Task') {
-                affectedItemIds.add(dep.data.blocking_task_id);
+                affectedItemIds.add((dep.data as TaskDependencyData).blocking_task_id);
               }
             });
           }
@@ -133,7 +250,7 @@ export const db = ({entries, setEntries}: {entries: Item[], setEntries: React.Di
           // Add items that this item is blocking
           const blockingItems = entries.filter(i => 
             i.blockedBy?.some(dep => 
-              dep.type === 'Task' && dep.data.blocking_task_id === item.id
+              dep.type === 'Task' && (dep.data as TaskDependencyData).blocking_task_id === item.id
             )
           );
           blockingItems.forEach(i => affectedItemIds.add(i.id));
@@ -147,7 +264,7 @@ export const db = ({entries, setEntries}: {entries: Item[], setEntries: React.Di
               return {
                 ...i,
                 blockedBy: i.blockedBy?.map(dep => {
-                  if (dep.type === 'Task' && dep.data.blocking_task_id === item.id) {
+                  if (dep.type === 'Task' && (dep.data as TaskDependencyData).blocking_task_id === item.id) {
                     return { ...dep, data: { ...dep.data } };
                   }
                   return dep;
@@ -165,6 +282,7 @@ export const db = ({entries, setEntries}: {entries: Item[], setEntries: React.Di
       });
     },
     setEntries,
+    userId
   }
   return db;
 }
@@ -200,31 +318,34 @@ const updateItemInDatabase = async (
 };
 
 const entityFactory = ({item, items, taskDependencies, dateDependencies, db}: {item: DBItem, items: DBItem[], taskDependencies: TaskDependency[], dateDependencies: DateDependency[], db: DB}):Item => {
-  const blockedBy= [
-    ...taskDependencies.filter(dep => dep.blocked_task_id === core.id).map(dep => ({
+  const blockedBy: Dependency[] = [
+    ...taskDependencies.filter(dep => dep.blocked_task_id === item.id).map(dep => ({
       type: 'Task' as const,
       data: dep
     })),
-    ...dateDependencies.filter(dep => dep.task_id === core.id).map(dep => ({
+    ...dateDependencies.filter(dep => dep.task_id === item.id).map(dep => ({
       type: 'Date' as const,
       data: dep
     }))
   ];
+  
   const subItems = items.filter(i => i.parent_id === item.id).sort((a, b) => a.position - b.position);
-  const blocking = taskDependencies.filter(dep => dep.blocking_task_id === core.id);
-  return {
+  const blocking = taskDependencies.filter(dep => dep.blocking_task_id === item.id);
+  
+  const entity = {
     ...item,
     blockedBy,
     isBlocked: blockedBy.length > 0,
     blocking,
     subItems,
     blockedCount: blockedBy.length || blocking.length || 0,
-    update: (partial: Partial<Item>) => db.update(item, partial),
+    update: (partial: Partial<Item>) => db.update(entity, partial),
     delete: (deleteChildren: boolean) => db.delete({id: item.id}, deleteChildren),
     create: (partial: Partial<Item>) => db.create(partial),
     entries: (partial: Partial<Item>) => db.entries(partial),
     entry: (partial: Partial<Item>) => db.entry(partial),
-  }
+  } as Item;
+  return entity;
 }
 
 export interface EntryProps {
@@ -235,110 +356,6 @@ export interface EntryProps {
   setTaskDependencies: React.Dispatch<React.SetStateAction<TaskDependency[]>>;
   dateDependencies: DateDependency[];
   setDateDependencies: React.Dispatch<React.SetStateAction<DateDependency[]>>;
-}
-
-export const entry = ({
-  partial,
-  items,
-  setItems,
-  taskDependencies,
-  setTaskDependencies, 
-  dateDependencies,
-  setDateDependencies
-}: EntryProps): Item | null => {
-
-  // Find the first item in the items.');
-  const dbItem = items.find(item => 
-    Object.entries(partial).every(([key, value]) => 
-      item[key as keyof DBItem] === value
-    )
-  );
-  
-  if (!dbItem) {
-    console.error('Item not found for partial:', partial);
-    return null;
-  }
-  
-  const dependencies = [
-    ...taskDependencies.filter(dep => dep.blocked_task_id === dbItem.id).map(dep => ({
-      type: 'Task' as const,
-      data: dep
-    })),
-    ...dateDependencies.filter(dep => dep.task_id === dbItem.id).map(dep => ({
-      type: 'Date' as const,
-      data: dep
-    }))
-  ];
-  const blocking = taskDependencies.filter(dep => dep.blocking_task_id === dbItem.id);
-  const item: Item = {
-    ...dbItem,
-    dependencies,
-    blocking,
-    subItems: entries({partial: {parent_id: dbItem.id}, items, setItems, taskDependencies, setTaskDependencies, dateDependencies, setDateDependencies}),
-    isCollapsed: false,
-    isBlocked: false,
-    blockedCount: dependencies.length || blocking.length || 0,
-    update: (partial: Partial<Item>): Item => {
-      // Trigger the database update asynchronously
-      const dbItemChanges = whatChanged(item, partial);
-      if (Object.keys(dbItemChanges).length > 0) {
-        updateItemInDatabase(dbItem, partial);
-        setItems(items.map(i => i.id === dbItem.id ? {...i, ...partial} : i))
-      }
-      // Return the updated item for local state
-      return { ...item, ...partial };
-    },
-    delete: (deleteChildren: boolean) => handleDeleteItem(dbItem, deleteChildren, setItems, items),
-    entry: (partial: Partial<DBItem>) => entry({partial, items, setItems, taskDependencies, setTaskDependencies, dateDependencies, setDateDependencies}),
-    create: (partial: Partial<DBItem>) => newItem({partial, items, setItems, taskDependencies, setTaskDependencies, dateDependencies, setDateDependencies}),
-    entries: (partial: Partial<DBItem>) => entries({partial, items, setItems, taskDependencies, setTaskDependencies, dateDependencies, setDateDependencies})
-  }
-
-  return item;
-};
-
-// Helper function to maintain backward compatibility with id-based lookups
-export const entryById = (
-  id: string,
-  items: DBItem[],
-  setItems: React.Dispatch<React.SetStateAction<DBItem[]>>,
-  taskDependencies: TaskDependency[],
-  setTaskDependencies: React.Dispatch<React.SetStateAction<TaskDependency[]>>,
-  dateDependencies: DateDependency[],
-  setDateDependencies: React.Dispatch<React.SetStateAction<DateDependency[]>>
-): Item | null => {
-  return entry({
-    partial: { id },
-    items,
-    setItems,
-    taskDependencies,
-    setTaskDependencies,
-    dateDependencies,
-    setDateDependencies
-  });
-};
-
-export const entries = ({partial, items, setItems, taskDependencies, setTaskDependencies, dateDependencies, setDateDependencies}: {partial: Partial<DBItem>, items: DBItem[], setItems: React.Dispatch<React.SetStateAction<DBItem[]>>, taskDependencies: TaskDependency[], setTaskDependencies: React.Dispatch<React.SetStateAction<TaskDependency[]>>, dateDependencies: DateDependency[], setDateDependencies: React.Dispatch<React.SetStateAction<DateDependency[]>>}) => (
-  items
-    .filter(i => Object.keys(partial).every(key => i[key as keyof DBItem] === partial[key as keyof DBItem]))
-    .map(i => entryById(i.id, items, setItems, taskDependencies, setTaskDependencies, dateDependencies, setDateDependencies))
-    .filter((item): item is Item => item !== null)
-)
-
-export const newItem = async ({partial, items, setItems}: {partial: Partial<DBItem>, items: DBItem[], setItems: React.Dispatch<React.SetStateAction<DBItem[]>>, taskDependencies?: TaskDependency[], setTaskDependencies?: React.Dispatch<React.SetStateAction<TaskDependency[]>>, dateDependencies?: DateDependency[], setDateDependencies?: React.Dispatch<React.SetStateAction<DateDependency[]>>}) => {
-    const { data: newTask, error } = await supabase
-        .from('items')
-        .insert(partial)
-        .select()
-        .single();
-        
-    if (error) {
-        console.error('Error creating item:', error);
-        return null;
-    }
-    
-    setItems([...items, newTask]);
-    return newTask;
 }
 
 /**
@@ -369,7 +386,7 @@ export const whatChanged = <T extends Record<string, unknown>>(
         ), {} as Partial<T>);
 }
 
-export default entryById;
+export default db;
 
 const handleDeleteItem = async (item: DBItem, deleteChildren: boolean, setItems: React.Dispatch<React.SetStateAction<DBItem[]>>, items: DBItem[]) => {
     try {
