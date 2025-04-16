@@ -7,6 +7,8 @@ import { ItemList } from './components/ItemList'
 import { Toolbar } from './components/Toolbar'
 import { supabase, type Database } from '../src/lib/supabase/client'
 import { toast } from 'react-hot-toast'
+import { Item as Entry } from './components/types'
+import { db, populateEntries } from '@/src/app/Entry'
 
 type Item = Database['public']['Tables']['items']['Row']
 type TaskDependency = Database['public']['Tables']['task_dependencies']['Row']
@@ -14,6 +16,7 @@ type DateDependency = Database['public']['Tables']['date_dependencies']['Row']
 
 export default function Home() {
   const [items, setItems] = useState<Item[]>([])
+  const [entries, setEntries] = useState<Entry[]>([])
   const [dependencies, setDependencies] = useState<TaskDependency[]>([])
   const [dateDependencies, setDateDependencies] = useState<DateDependency[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -26,7 +29,9 @@ export default function Home() {
   const [showOnlyActionable, setShowOnlyActionable] = useState(false)
   const [showOnlyBlocked, setShowOnlyBlocked] = useState(false)
   const [childCount] = useState<Map<string, number>>(new Map())
-
+  
+  const database = db({entries, setEntries});
+  populateEntries(database);
   useEffect(() => {
     const fetchUserAndData = async () => {
       try {
