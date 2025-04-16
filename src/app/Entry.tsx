@@ -5,6 +5,62 @@ type DBItem = Database['public']['Tables']['items']['Row']
 type TaskDependency = Database['public']['Tables']['task_dependencies']['Row']
 type DateDependency = Database['public']['Tables']['date_dependencies']['Row']
 
+type DB = {
+  create: (partial: Partial<Item>) => Promise<Item|null>,
+  entries: (partial: Partial<Item>) => Item[],
+  entry: (partial: Partial<Item>) => Item,
+  delete: (partial: Partial<Item>, deleteChildren: boolean) => Promise<void>,
+  update: (id: string, updates: Partial<Item>) => Promise<Item|null>,
+  setEntries: (entries: Item[]) => void,
+}
+export const populateEntries = async (db:DB) => {
+    const { data: items, error: itemsError } = await supabase
+        .from('items')
+        .select('*')
+        .eq('user_id', userId)
+    
+    const { data: dependenciesData, error: dependenciesError } = await supabase
+      .from('task_dependencies')
+      .select('*')
+      .eq('user_id', userId)
+
+    const { data: dateDependenciesData, error: dateDependenciesError } = await supabase
+      .from('date_dependencies')
+      .select('*')
+      .eq('user_id', userId)
+  const entries = items.map(item => entityFactory({item, items, dependenciesData, dateDependenciesData}))
+  db.setEntries(entries);
+}
+export const db = ({entries, setEntries}: {entries: Item[], setEntries: React.Dispatch<React.SetStateAction<Item[]>>}):DB => {
+  const db = {
+    create: (partial: Partial<Item>) => Promise.resolve(null),
+    entries: (partial: Partial<Item>) => (
+      entries
+      .filter(i => Object.keys(partial).every(key => i[key as keyof DBItem] === partial[key as keyof DBItem]))
+    ),
+    entry: (partial: Partial<Item>) => (
+      entries
+      .find(i => Object.keys(partial).every(key => i[key as keyof DBItem] === partial[key as keyof DBItem]))
+  ),
+    delete: (partial: Partial<Item>, deleteChildren: boolean) => Promise.resolve(),
+    update: (item: Item, updates: Partial<Item>):Promise<Item|null> => {
+      return new Promise((resolve) => {
+        // Trigger the database update asynchronously
+        const dbItemChanges = whatChanged(item, updates);
+        if (Object.keys(dbItemChanges).length > 0) {
+          updateItemInDatabase(item, dbItemChanges).then(() => {
+            setEntries(entries.map(i => i.id === item.id ? {...i, ...dbItemChanges} : i));
+            resolve({ ...item, ...updates });
+          });
+        } else {
+          resolve(item);
+        }
+      });
+    },
+    setEntries,
+  }
+  return db;
+}
 
 /**
  * Updates an item in the database with changed fields
@@ -35,6 +91,34 @@ const updateItemInDatabase = async (
         }
     }
 };
+
+const entityFactory = ({item, items, taskDependencies, dateDependencies, db}: {item: DBItem, items: DBItem[], taskDependencies: TaskDependency[], dateDependencies: DateDependency[], db: DB}):Item => {
+  const blockedBy= [
+    ...taskDependencies.filter(dep => dep.blocked_task_id === core.id).map(dep => ({
+      type: 'Task' as const,
+      data: dep
+    })),
+    ...dateDependencies.filter(dep => dep.task_id === core.id).map(dep => ({
+      type: 'Date' as const,
+      data: dep
+    }))
+  ];
+  const subItems = items.filter(i => i.parent_id === item.id).sort((a, b) => a.position - b.position);
+  const blocking = taskDependencies.filter(dep => dep.blocking_task_id === core.id);
+  return {
+    ...item,
+    blockedBy,
+    isBlocked: blockedBy.length > 0,
+    blocking,
+    subItems,
+    blockedCount: blockedBy.length || blocking.length || 0,
+    update: (partial: Partial<Item>) => db.update(item, partial),
+    delete: (deleteChildren: boolean) => db.delete({id: item.id}, deleteChildren),
+    create: (partial: Partial<Item>) => db.create(partial),
+    entries: (partial: Partial<Item>) => db.entries(partial),
+    entry: (partial: Partial<Item>) => db.entry(partial),
+  }
+}
 
 export interface EntryProps {
   partial: Partial<DBItem>;

@@ -12,17 +12,17 @@ export type Dependencies = Array<{
   type: 'Task' | 'Date',
   data: TaskDependencyRow | DateDependencyRow
 }>
+export type EntryFunc = () => Item
 
 export type Item = ItemRow & {
-    dependencies: Dependencies,
-    subItems: Item[],
-    isCollapsed: boolean,
+    blockedBy: Dependencies,
+    subItems: ItemRow[],
     isBlocked: boolean,
     blockedCount: number,
     blocking: TaskDependencyRow[],
-    update: (partial: Partial<Item>) => Item,
-    delete: (deleteChildren: boolean) => void,
-    entry: (partial: Partial<ItemRow> & {isNew?:boolean}) => Item | null,
-    create: (partial: Partial<ItemRow>) => Item,
+    update: (partial: Partial<Item>) => Promise<Item|null>,
+    delete: (deleteChildren: boolean) => Promise<void>,
+    entry: (partial: Partial<ItemRow>) => Item | null,
+    create: (partial: Partial<ItemRow>) => Promise<Item|null>,
     entries: (partial: Partial<ItemRow>) => Item[]
   }
