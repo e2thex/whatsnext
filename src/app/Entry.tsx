@@ -44,16 +44,123 @@ export const db = ({entries, setEntries}: {entries: Item[], setEntries: React.Di
   ),
     delete: (partial: Partial<Item>, deleteChildren: boolean) => Promise.resolve(),
     update: (item: Item, updates: Partial<Item>):Promise<Item|null> => {
-      return new Promise((resolve) => {
-        // Trigger the database update asynchronously
-        const dbItemChanges = whatChanged(item, updates);
-        if (Object.keys(dbItemChanges).length > 0) {
-          updateItemInDatabase(item, dbItemChanges).then(() => {
-            setEntries(entries.map(i => i.id === item.id ? {...i, ...dbItemChanges} : i));
-            resolve({ ...item, ...updates });
-          });
-        } else {
-          resolve(item);
+      return new Promise(async (resolve) => {
+        try {
+          // TODO: Refactor into smaller functions:
+          // - handleItemUpdate: Process regular item updates
+          // - handleDependencyChanges: Process blockedBy array changes
+          // - getAffectedItems: Get all items that need updating
+          // - updateLocalState: Update entries array with all changes
+
+          // Handle regular item updates
+          const dbItemChanges = whatChanged(item, updates);
+          if (Object.keys(dbItemChanges).length > 0) {
+            await updateItemInDatabase(item, dbItemChanges);
+          }
+
+          // Handle dependency changes if blockedBy array changed
+          if (updates.blockedBy !== undefined) {
+            const currentDependencies = item.blockedBy || [];
+            const newDependencies = updates.blockedBy || [];
+            
+            // Find dependencies to add and remove
+            const dependenciesToAdd = newDependencies.filter(newDep => 
+              !currentDependencies.some(currentDep => 
+                currentDep.type === newDep.type && 
+                currentDep.data.id === newDep.data.id
+              )
+            );
+            
+            const dependenciesToRemove = currentDependencies.filter(currentDep => 
+              !newDependencies.some(newDep => 
+                newDep.type === currentDep.type && 
+                newDep.data.id === currentDep.data.id
+              )
+            );
+
+            // Process task dependencies
+            for (const dep of dependenciesToAdd) {
+              if (dep.type === 'Task') {
+                await supabase
+                  .from('task_dependencies')
+                  .insert({
+                    blocking_task_id: dep.data.blocking_task_id,
+                    blocked_task_id: item.id,
+                  });
+              } else if (dep.type === 'Date') {
+                await supabase
+                  .from('date_dependencies')
+                  .upsert({
+                    task_id: item.id,
+                    unblock_at: dep.data.unblock_at,
+                  });
+              }
+            }
+
+            // Remove dependencies
+            for (const dep of dependenciesToRemove) {
+              if (dep.type === 'Task') {
+                await supabase
+                  .from('task_dependencies')
+                  .delete()
+                  .eq('blocking_task_id', dep.data.blocking_task_id)
+                  .eq('blocked_task_id', item.id);
+              } else if (dep.type === 'Date') {
+                await supabase
+                  .from('date_dependencies')
+                  .delete()
+                  .eq('task_id', item.id);
+              }
+            }
+          }
+
+          // Update local state after all database operations are complete
+          const updatedItem = { ...item, ...updates };
+          
+          // Get all affected items (current item and items on both sides of dependencies)
+          const affectedItemIds = new Set<string>();
+          affectedItemIds.add(item.id);
+          
+          // Add items that are blocking this item
+          if (updates.blockedBy) {
+            updates.blockedBy.forEach(dep => {
+              if (dep.type === 'Task') {
+                affectedItemIds.add(dep.data.blocking_task_id);
+              }
+            });
+          }
+          
+          // Add items that this item is blocking
+          const blockingItems = entries.filter(i => 
+            i.blockedBy?.some(dep => 
+              dep.type === 'Task' && dep.data.blocking_task_id === item.id
+            )
+          );
+          blockingItems.forEach(i => affectedItemIds.add(i.id));
+
+          // Update all affected items in the entries array
+          setEntries(entries.map(i => {
+            if (i.id === item.id) {
+              return updatedItem;
+            } else if (affectedItemIds.has(i.id)) {
+              // For other affected items, we need to refresh their blockedBy array
+              return {
+                ...i,
+                blockedBy: i.blockedBy?.map(dep => {
+                  if (dep.type === 'Task' && dep.data.blocking_task_id === item.id) {
+                    return { ...dep, data: { ...dep.data } };
+                  }
+                  return dep;
+                })
+              };
+            }
+            return i;
+          }));
+
+          resolve(updatedItem);
+        } catch (error) {
+          console.error('Error updating item:', error);
+          resolve(null);
         }
       });
     },
