@@ -1,15 +1,24 @@
 import { useMemo, useCallback, type ReactNode, useEffect, useState } from 'react'
-import { Item as ItemComponent } from './Item'
+import { Item } from './Item'
 import { useDrop } from 'react-dnd'
 import { type Database } from '../../src/lib/supabase/client'
 import { Breadcrumb } from './Breadcrumb'
 import { useDragDropManager } from 'react-dnd'
-import { entry } from '@/src/app/Entry'
-import { Item } from '@/app/components/types'
+import { Item as DbItem, Dependencies } from '@/app/components/types'
+import { Item as UiItem } from '@/app/types'
+import { db, type DB } from '@/src/app/Entry'
+import { supabase } from '@/src/lib/supabase/client'
 
-type ItemRow = Database['public']['Tables']['items']['Row']
 type TaskDependencyRow = Database['public']['Tables']['task_dependencies']['Row']
 type DateDependencyRow = Database['public']['Tables']['date_dependencies']['Row']
+
+const isTaskDependency = (dep: Dependencies[number]): dep is { type: 'Task', data: TaskDependencyRow } => {
+  return dep.type === 'Task';
+}
+
+const isDateDependency = (dep: Dependencies[number]): dep is { type: 'Date', data: DateDependencyRow } => {
+  return dep.type === 'Date';
+}
 
 interface DragItem {
   id: string
@@ -78,62 +87,37 @@ function DropZone({ parentId, position, onMoveItemToPosition, isAnyItemEditing =
 }
 
 export interface ItemListProps {
-  items: ItemRow[]
-  setItems: React.Dispatch<React.SetStateAction<ItemRow[]>>
-  dependencies: TaskDependencyRow[]
-  setDependencies: React.Dispatch<React.SetStateAction<TaskDependencyRow[]>>
-  dateDependencies: DateDependencyRow[]
-  setDateDependencies: React.Dispatch<React.SetStateAction<DateDependencyRow[]>>
-  onAddChild: (parentId: string | null) => void
-  onToggleComplete: (id: string) => void
-  onMoveItemToPosition: (itemId: string, newPosition: number, parentId: string | null) => void
-  onUpdateItem: (id: string, updates: { title?: string; description?: string }) => void
+  db: DB
+  entries: DbItem[]
   onFocus: (id: string | null) => void
-  onAddDependency: (blockingTaskId: string, blockedTaskId: string) => void
-  onRemoveDependency: (blockingTaskId: string, blockedTaskId: string) => void
-  onAddDateDependency: (taskId: string, unblockAt: Date) => void
-  onRemoveDateDependency: (taskId: string) => void
-  createSubtask: (parentId: string, title: string, position: number) => void
-  reorderSubtasks: (parentId: string, subtaskIds: string[]) => void
-  onUpdateSubtask: (subtaskId: string, updates: { title: string; position: number }) => void
- 
   focusedItemId: string | null
   viewMode: 'list' | 'tree'
   showOnlyActionable: boolean
   showOnlyBlocked: boolean
-  completionFilter: 'all' | 'complete' | 'incomplete'
+  completionFilter: 'all' | 'completed' | 'not-completed'
   searchQuery: string
+  childCount: Map<string, number>
 }
 
 export function ItemList({ 
-  items, 
-  setItems,
-  dependencies,
-  setDependencies,
-  dateDependencies,
-  setDateDependencies,
-  onAddChild, 
-  onToggleComplete, 
-  onMoveItemToPosition,
+  db,
+  entries,
   onFocus,
-  onAddDependency,
-  onRemoveDependency,
-  onAddDateDependency,
-  onRemoveDateDependency,
-  createSubtask,
-  onUpdateSubtask,
   focusedItemId,
   viewMode,
   showOnlyActionable,
   showOnlyBlocked,
   completionFilter,
-  searchQuery
+  searchQuery,
+  childCount
 }: ItemListProps) {
+  console.log('ItemList render - entries length:', entries.length);
   const [isAnyItemEditing, setIsAnyItemEditing] = useState(false);
 
   const itemsByParent = useMemo(() => {
-    const map = new Map<string | null, ItemRow[]>()
-    items.forEach(item => {
+    console.log('Computing itemsByParent');
+    const map = new Map<string | null, DbItem[]>()
+    entries.forEach(item => {
       const parentItems = map.get(item.parent_id) || []
       map.set(item.parent_id, [...parentItems, item])
     })
@@ -144,38 +128,47 @@ export function ItemList({
     })
     
     return map
-  }, [items])
+  }, [entries])
 
   const dependenciesByTask = useMemo(() => {
+    console.log('Computing dependenciesByTask');
     const blocking = new Map<string, TaskDependencyRow[]>()
-    const blockedBy = new Map<string, TaskDependencyRow[]>()
+    const blockedBy = new Map<string, Dependencies>()
 
-    dependencies.forEach(dep => {
-      const blockingTasks = blocking.get(dep.blocking_task_id) || []
-      blocking.set(dep.blocking_task_id, [...blockingTasks, dep])
+    entries.forEach(item => {
+      // Handle blocking tasks (tasks that this item blocks)
+      item.blocking.forEach(dep => {
+        const blockingTasks = blocking.get(dep.blocked_task_id) || []
+        blocking.set(dep.blocked_task_id, [...blockingTasks, dep])
+      })
 
-      const blockedByTasks = blockedBy.get(dep.blocked_task_id) || []
-      blockedBy.set(dep.blocked_task_id, [...blockedByTasks, dep])
+      // Handle blocked by tasks (tasks that block this item)
+      item.blockedBy.forEach(dep => {
+        if (dep.type === 'Task') {
+          const blockedByTasks = blockedBy.get(item.id) || []
+          blockedBy.set(item.id, [...blockedByTasks, dep])
+        }
+      })
     })
 
     return { blocking, blockedBy }
-  }, [dependencies])
+  }, [entries])
 
   // Get the ancestry chain for any item
-  const getItemAncestry = useCallback((itemId: string): ItemRow[] => {
-    const ancestry: ItemRow[] = [];
-    let currentItem = items.find(item => item.id === itemId);
+  const getItemAncestry = useCallback((itemId: string): DbItem[] => {
+    const ancestry: DbItem[] = [];
+    let currentItem = entries.find(item => item.id === itemId);
     
     while (currentItem) {
       ancestry.unshift(currentItem); // Add to the beginning of the array
-      currentItem = items.find(item => item.id === currentItem?.parent_id);
+      currentItem = entries.find(item => item.id === currentItem?.parent_id);
     }
     
     return ancestry;
-  }, [items]);
+  }, [entries]);
 
   // Get the path from ancestor to descendant (inclusive)
-  const getPathBetweenItems = (ancestorId: string, descendantId: string): ItemRow[] => {
+  const getPathBetweenItems = (ancestorId: string, descendantId: string): DbItem[] => {
     const ancestry = getItemAncestry(descendantId)
     const ancestorIndex = ancestry.findIndex(item => item.id === ancestorId)
     
@@ -190,40 +183,23 @@ export function ItemList({
 
     return children.every(child => {
       // Get direct blockage status
-      const childBlockedBy = dependenciesByTask.blockedBy.get(child.id) || []
-      const isDirectlyBlocked = childBlockedBy.some(dep => {
-        const blockingTask = items.find(t => t.id === dep.blocking_task_id)
-        return blockingTask && !blockingTask.completed
-      })
+      const isDirectlyBlocked = child.isBlocked
 
       // If it has children, check if they're all blocked
       const hasChildren = itemsByParent.has(child.id)
       return isDirectlyBlocked || (hasChildren && areAllChildrenBlocked(child.id))
     })
-  }, [itemsByParent, dependenciesByTask.blockedBy, items])
+  }, [itemsByParent])
 
   // Check if an item is blocked (either directly, through children, or by date)
-  const isItemBlocked = useCallback((item: ItemRow): boolean => {
-    // Check date dependency
-    const dateDependency = dateDependencies.find(dep => dep.task_id === item.id)
-    if (dateDependency && new Date(dateDependency.unblock_at) > new Date()) {
-      return true
-    }
-
-    // Check direct task dependency blockage
-    const blockedByDeps = dependenciesByTask.blockedBy.get(item.id) || []
-    const isDirectlyBlocked = blockedByDeps.some(dep => {
-      const blockingTask = items.find(t => t.id === dep.blocking_task_id)
-      return blockingTask && !blockingTask.completed
-    })
-
+  const isItemBlocked = useCallback((item: DbItem): boolean => {
     // If directly blocked, no need to check children
-    if (isDirectlyBlocked) return true
+    if (item.isBlocked) return true
 
     // If has children, check if all children are blocked
     const hasChildren = itemsByParent.has(item.id)
     return hasChildren && areAllChildrenBlocked(item.id)
-  }, [dependenciesByTask.blockedBy, items, itemsByParent, areAllChildrenBlocked, dateDependencies])
+  }, [itemsByParent, areAllChildrenBlocked])
 
   // Find all items matching the search query
   const searchMatchingItemIds = useMemo(() => {
@@ -234,7 +210,7 @@ export function ItemList({
     const matchingIds = new Set<string>()
     
     // First, find directly matching items
-    items.forEach(item => {
+    entries.forEach(item => {
       if (
         (item.title && item.title.toLowerCase().includes(normalizedQuery)) ||
         (item.description && item.description.toLowerCase().includes(normalizedQuery))
@@ -269,9 +245,199 @@ export function ItemList({
     })
     
     return matchingIds
-  }, [items, searchQuery, itemsByParent, getItemAncestry])
+  }, [entries, searchQuery, itemsByParent, getItemAncestry])
+
+  const onMoveItemToPosition = useCallback(async (itemId: string, newPosition: number, parentId: string | null) => {
+    const item = entries.find(i => i.id === itemId)
+    if (!item) return
+
+    await item.update({ position: newPosition, parent_id: parentId })
+  }, [entries])
+
+  const onAddChild = useCallback(async (parentId: string | null) => {
+    const newItem = await db.create({
+      title: '',
+      description: '',
+      type: 'task',
+      parent_id: parentId,
+      position: itemsByParent.get(parentId)?.length || 0,
+      completed: false,
+      user_id: db.userId
+    })
+    
+    if (newItem) {
+      onFocus(newItem.id)
+    }
+  }, [itemsByParent, db, onFocus])
+
+  const onToggleComplete = useCallback(async (id: string) => {
+    const item = entries.find(i => i.id === id)
+    if (!item) return
+
+    await item.update({ completed: !item.completed })
+  }, [entries])
+
+  const onAddDependency = useCallback(async (blockingTaskId: string, blockedTaskId: string) => {
+    const blockingTask = entries.find(i => i.id === blockingTaskId)
+    const blockedTask = entries.find(i => i.id === blockedTaskId)
+    
+    if (!blockingTask || !blockedTask) return
+
+    // Create a new task dependency through the blockedTask's update method
+    await blockedTask.update({
+      blockedBy: [...blockedTask.blockedBy, { 
+        type: 'Task', 
+        data: {
+          id: crypto.randomUUID(),
+          created_at: new Date().toISOString(),
+          blocking_task_id: blockingTaskId,
+          blocked_task_id: blockedTaskId,
+          user_id: db.userId
+        }
+      }]
+    })
+  }, [entries, db])
+
+  const onRemoveDependency = useCallback(async (blockingTaskId: string, blockedTaskId: string) => {
+    const blockedTask = entries.find(i => i.id === blockedTaskId)
+    if (!blockedTask) return
+
+    await blockedTask.update({
+      blockedBy: blockedTask.blockedBy.filter(dep => {
+        if (isTaskDependency(dep)) {
+          return dep.data.blocking_task_id !== blockingTaskId
+        }
+        return true
+      })
+    })
+  }, [entries])
+
+  const onAddDateDependency = useCallback(async (taskId: string, unblockAt: Date) => {
+    const task = entries.find(i => i.id === taskId)
+    if (!task) return
+
+    // Create a new date dependency through the task's update method
+    await task.update({
+      blockedBy: [...task.blockedBy, { 
+        type: 'Date', 
+        data: {
+          id: crypto.randomUUID(),
+          created_at: new Date().toISOString(),
+          task_id: taskId,
+          unblock_at: unblockAt.toISOString(),
+          user_id: db.userId
+        }
+      }]
+    })
+  }, [entries, db])
+
+  const onRemoveDateDependency = useCallback(async (taskId: string) => {
+    const task = entries.find(i => i.id === taskId)
+    if (!task) return
+
+    await task.update({
+      blockedBy: task.blockedBy.filter(dep => {
+        if (isDateDependency(dep)) {
+          return dep.data.task_id !== taskId
+        }
+        return true
+      })
+    })
+  }, [entries])
+
+  const onDeleteItem = useCallback(async (itemId: string, deleteChildren: boolean) => {
+    const item = entries.find(i => i.id === itemId)
+    if (!item) return
+
+    await item.delete(deleteChildren)
+  }, [entries])
+
+  const renderItem = (item: DbItem, index: number, parentId: string | null) => {
+    const blockingTasks = item.blocking
+    const blockedByTasks = item.blockedBy.filter(isTaskDependency).map(dep => dep.data)
+    const dateDependency = item.blockedBy.find(isDateDependency)?.data
+
+    const handleMoveItem = (dragIndex: number, hoverIndex: number) => {
+      const draggedItem = entries[dragIndex]
+      if (draggedItem) {
+        onMoveItemToPosition(draggedItem.id, hoverIndex, parentId)
+      }
+    }
+
+    return (
+      <div key={item.id}>
+        <DropZone
+          parentId={parentId}
+          position={index}
+          onMoveItemToPosition={onMoveItemToPosition}
+          isAnyItemEditing={isAnyItemEditing}
+        />
+        <Item
+          item={{
+            ...item,
+            type: item.type === 'task' ? 'task' : 'mission',
+            blockedBy: item.blockedBy.map(dep => {
+              if (isTaskDependency(dep)) {
+                return {
+                  type: 'Task' as const,
+                  data: {
+                    id: dep.data.blocking_task_id,
+                    created_at: dep.data.created_at,
+                    blocking_task_id: dep.data.blocking_task_id,
+                    blocked_task_id: dep.data.blocked_task_id,
+                    user_id: dep.data.user_id
+                  }
+                }
+              } else if (isDateDependency(dep)) {
+                return {
+                  type: 'Date' as const,
+                  data: {
+                    id: dep.data.task_id,
+                    created_at: dep.data.created_at,
+                    task_id: dep.data.task_id,
+                    unblock_at: dep.data.unblock_at,
+                    user_id: dep.data.user_id
+                  }
+                }
+              }
+              return {
+                type: 'Task' as const,
+                data: {
+                  id: '',
+                  created_at: new Date().toISOString(),
+                  blocking_task_id: '',
+                  blocked_task_id: '',
+                  user_id: ''
+                }
+              }
+            })
+          }}
+          itemPosition={index}
+          siblingCount={itemsByParent.get(parentId)?.length || 0}
+          onAddChild={onAddChild}
+          onToggleComplete={onToggleComplete}
+          onFocus={onFocus}
+          onAddDependency={onAddDependency}
+          onRemoveDependency={onRemoveDependency}
+          onAddDateDependency={onAddDateDependency}
+          onRemoveDateDependency={onRemoveDateDependency}
+          hasChildren={itemsByParent.has(item.id)}
+          childCount={childCount.get(item.id) || 0}
+          blockingTasks={blockingTasks}
+          blockedByTasks={blockedByTasks}
+          dateDependency={dateDependency}
+          availableTasks={entries}
+          isSearchMatch={searchMatchingItemIds.has(item.id)}
+          breadcrumbs={getItemAncestry(item.id)}
+          onNavigate={onFocus}
+          searchQuery={searchQuery}
+        />
+      </div>
+    )
+  }
 
   const renderTreeView = (parentId = focusedItemId || null) => {
+    console.log('Rendering tree view for parentId:', parentId);
     // Get items for this parent
     const baseItems = itemsByParent.get(parentId) || []
     
@@ -288,37 +454,23 @@ export function ItemList({
                           (showOnlyBlocked && blocked); // Show only blocked
       
       const completionFilterResult = completionFilter === 'all' || 
-                                    (completionFilter === 'complete' && item.completed) ||
-                                    (completionFilter === 'incomplete' && !item.completed);
+                                    (completionFilter === 'completed' && item.completed) ||
+                                    (completionFilter === 'not-completed' && !item.completed);
       
       return blockFilter && completionFilterResult;
     })
+    
+    console.log('Filtered items count:', filteredItems.length);
     
     // Custom sort function that puts items in position order
     const sortedItems = [...filteredItems].sort((a, b) => a.position - b.position)
     
     const content: ReactNode[] = []
-
+    console.log(sortedItems, 'sortedItems');
     sortedItems.forEach((item, index) => {
       const childItems = itemsByParent.get(item.id) || []
       const hasChildren = childItems.length > 0
       
-      // Get the enhanced item
-      const enhancedItem = entry({
-        partial: {id: item.id}, 
-        items, 
-        setItems,
-        taskDependencies: dependencies, 
-        setTaskDependencies: setDependencies,
-        dateDependencies,
-        setDateDependencies
-      });
-      
-      // Skip rendering if we couldn't enhance the item
-      if (!enhancedItem) {
-        return; // Skip this item
-      }
-
       // Continue with rendering as before
       const itemChildren = hasChildren ? (
         <div className="space-y-0.5">
@@ -328,421 +480,61 @@ export function ItemList({
 
       content.push(
         <div key={item.id} className="py-0.5">
-          <DropZone
-            parentId={item.parent_id}
-            position={item.position}
-            onMoveItemToPosition={onMoveItemToPosition}
-            isAnyItemEditing={isAnyItemEditing}
-          />
-          <ItemComponent
-            item={enhancedItem}
-            onAddChild={onAddChild}
-            onToggleComplete={onToggleComplete}
-            onFocus={onFocus}
-            onAddDependency={onAddDependency}
-            onRemoveDependency={onRemoveDependency}
-            onAddDateDependency={onAddDateDependency}
-            onRemoveDateDependency={onRemoveDateDependency}
-            onCreateSubtask={createSubtask}
-            onUpdateSubtask={onUpdateSubtask}
-            onEditingChange={(isEditing) => setIsAnyItemEditing(isEditing)}
-            siblingCount={childItems.length}
-            itemPosition={index}
-            hasChildren={hasChildren}
-            childCount={childItems.length}
-            blockingTasks={dependenciesByTask.blocking.get(item.id) || []}
-            blockedByTasks={dependenciesByTask.blockedBy.get(item.id) || []}
-            dateDependency={dateDependencies.find(dep => dep.task_id === item.id)}
-            availableTasks={items.map(i => {
-              return entry({
-                partial: {id: i.id}, 
-                items, 
-                setItems,
-                taskDependencies: dependencies, 
-                setTaskDependencies: setDependencies,
-                dateDependencies,
-                setDateDependencies
-              })!; // Safe to use ! here
-            })}
-            isSearchMatch={
-              !!searchQuery.trim() && 
-              searchMatchingItemIds.has(item.id) && 
-              !!(
-                (item.title && item.title.toLowerCase().includes(searchQuery.toLowerCase().trim())) ||
-                (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase().trim()))
-              )
-            }
-            searchQuery={searchQuery}
-          >
-            {itemChildren}
-          </ItemComponent>
-          {index === sortedItems.length - 1 && (
-            <DropZone
-              parentId={item.parent_id}
-              position={item.position + 1}
-              onMoveItemToPosition={onMoveItemToPosition}
-              isAnyItemEditing={isAnyItemEditing}
-            />
-          )}
+          {renderItem(item, index, item.parent_id)}
         </div>
       )
     })
-
+    console.log(content, 'content');
     return content
   }
 
   const renderListView = () => {
-    // If there are no items at all, show empty state
-    if (items.length === 0) {
-      return (
-        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-          <p className="mb-4 text-lg">No tasks yet</p>
-          <button
-            onClick={() => onAddChild(null)}
-            className="flex items-center justify-center w-10 h-10 text-white bg-blue-500 rounded-full hover:bg-blue-600"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-          </button>
-        </div>
-      )
-    }
-
-    // First, we always identify bottom-level tasks (tasks with no children)
-    const bottomLevelTasks = items.filter(item => {
-      return !items.some(child => child.parent_id === item.id)
-    })
-
-    // Then determine which of these tasks to display based on search and focus
-    let displayedTasks = bottomLevelTasks
+    console.log('Rendering list view');
+    // Get all items that are at the root level or under the focused item
+    const baseItems = itemsByParent.get(focusedItemId || null) || []
     
-    // If there's a search query, restrict to items that are in searchMatchingItemIds
-    if (searchQuery.trim()) {
-      displayedTasks = bottomLevelTasks.filter(item => searchMatchingItemIds.has(item.id))
-    } else if (focusedItemId) {
-      // If focused and no search, get bottom level tasks under the focused item
-      const getBottomLevelTasksUnderParent = (parentId: string): ItemRow[] => {
-        const result: ItemRow[] = []
-        const queue = [parentId]
-        
-        // First check if the focused item itself is a bottom-level task
-        const focusedItem = items.find(item => item.id === parentId)
-        const focusedItemHasChildren = items.some(item => item.parent_id === parentId)
-        
-        if (focusedItem && !focusedItemHasChildren) {
-          // If the focused item has no children, include it in the results
-          result.push(focusedItem)
-        }
-        
-        while (queue.length > 0) {
-          const current = queue.shift()!
-          const children = itemsByParent.get(current) || []
-          
-          for (const child of children) {
-            const grandchildren = itemsByParent.get(child.id) || []
-            if (grandchildren.length === 0) {
-              result.push(child)
-            } else {
-              queue.push(child.id)
-            }
-          }
-        }
-        
-        return result
+    // Filter items based on actionable/blocked status, completion status, and search results
+    const filteredItems = baseItems.filter(item => {
+      // If we have an active search, only show items in the search results
+      if (searchQuery.trim() && !searchMatchingItemIds.has(item.id)) {
+        return false
       }
       
-      displayedTasks = getBottomLevelTasksUnderParent(focusedItemId)
-    }
-    // If neither search nor focus, we already have all bottom level tasks in displayedTasks
-
-    // Apply filters for completion and blocked status
-    const filteredTasks = displayedTasks.filter(item => {
       const blocked = isItemBlocked(item)
       const blockFilter = (!showOnlyActionable && !showOnlyBlocked) || // Show all
                           (showOnlyActionable && !blocked) || // Show only unblocked
                           (showOnlyBlocked && blocked); // Show only blocked
       
       const completionFilterResult = completionFilter === 'all' || 
-                                    (completionFilter === 'complete' && item.completed) ||
-                                    (completionFilter === 'incomplete' && !item.completed);
+                                    (completionFilter === 'completed' && item.completed) ||
+                                    (completionFilter === 'not-completed' && !item.completed);
       
       return blockFilter && completionFilterResult;
-    });
-
-    // Sort tasks by ancestry and position
-    filteredTasks.sort((a, b) => {
-      const aAncestry = getItemAncestry(a.id);
-      const bAncestry = getItemAncestry(b.id);
-      
-      // Compare each level of ancestry
-      const minLength = Math.min(aAncestry.length, bAncestry.length);
-      
-      for (let i = 0; i < minLength; i++) {
-        // If ancestors differ at this level, sort by position
-        if (aAncestry[i].id !== bAncestry[i].id) {
-          return aAncestry[i].position - bAncestry[i].position;
-        }
-      }
-      
-      // If one path is shorter, it comes first
-      if (aAncestry.length !== bAncestry.length) {
-        return aAncestry.length - bAncestry.length;
-      }
-      
-      // If paths are same length and have same ancestors, sort by position
-      return a.position - b.position;
-    });
-
-    // If no tasks match our criteria, show empty state
-    if (filteredTasks.length === 0) {
-      return (
-        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-          <p className="mb-4 text-lg">{searchQuery.trim() ? 'No matching tasks found' : 'No tasks here yet'}</p>
-          {!searchQuery.trim() && (
-            <button
-              onClick={() => onAddChild(focusedItemId)}
-              className="flex items-center justify-center w-10 h-10 text-white bg-blue-500 rounded-full hover:bg-blue-600"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-            </button>
-          )}
-        </div>
-      )
-    }
-
+    })
+    
+    console.log('Filtered items count:', filteredItems.length);
+    
+    console.log('sortedItems', filteredItems);
+    // Custom sort function that puts items in position order
+    const sortedItems = [...filteredItems].sort((a, b) => a.position - b.position)
+    console.log(sortedItems, 'sortedItems');
     return (
       <div className="space-y-0.5">
-        {/* Add a drop zone at the beginning for empty lists or at position 0 */}
-        {filteredTasks.length === 0 ? (
-          <DropZone
-            parentId={focusedItemId || null}
-            position={0}
-            onMoveItemToPosition={onMoveItemToPosition}
-            isAnyItemEditing={isAnyItemEditing}
-          />
-        ) : (
-          <DropZone
-            parentId={filteredTasks[0].parent_id}
-            position={0}
-            onMoveItemToPosition={onMoveItemToPosition}
-            isAnyItemEditing={isAnyItemEditing}
-          />
-        )}
-        
-        {filteredTasks.map((task, index) => {
-          // Show breadcrumbs if we're at root level or if we're focused and this task is deeper than the focused item
-          const breadcrumbs = !focusedItemId || searchQuery.trim()
-            ? getItemAncestry(task.id).slice(0, -1) // Show full ancestry except the task itself when at root or searching
-            : task.id !== focusedItemId
-              ? getPathBetweenItems(focusedItemId, task.id).slice(1, -1) // Show path between focused item and task
-              : []
-
-          // Enhance the raw task with required properties
-          const enhancedTask = entry({
-            partial: {id: task.id}, 
-            items, 
-            setItems,
-            taskDependencies: dependencies,
-            setTaskDependencies: setDependencies,
-            dateDependencies,
-            setDateDependencies
-          });
-          
-          if (!enhancedTask) {
-            return null; // Skip this task if it can't be enhanced
-          }
-          
-          // Enhance breadcrumb items
-          const enhancedBreadcrumbs = breadcrumbs
-            .map(item => {
-              return entry({
-                partial: {id: item.id}, 
-                items, 
-                setItems,
-                taskDependencies: dependencies,
-                setTaskDependencies: setDependencies,
-                dateDependencies,
-                setDateDependencies
-              });
-            })
-            .filter((item): item is Item => item !== null);
-
-          return (
-            <div key={task.id} className="py-0.5">
-              <div className="bg-white rounded">
-                <ItemComponent
-                  item={enhancedTask}
-                  onAddChild={onAddChild}
-                  onToggleComplete={onToggleComplete}
-                  onFocus={onFocus}
-                  onAddDependency={onAddDependency}
-                  onRemoveDependency={onRemoveDependency}
-                  onAddDateDependency={onAddDateDependency}
-                  onRemoveDateDependency={onRemoveDateDependency}
-                  onCreateSubtask={createSubtask}
-                  onUpdateSubtask={onUpdateSubtask}
-                  onEditingChange={(isEditing) => setIsAnyItemEditing(isEditing)}
-                  siblingCount={1}
-                  itemPosition={index}
-                  hasChildren={false}
-                  childCount={0}
-                  blockingTasks={dependenciesByTask.blocking.get(task.id) || []}
-                  blockedByTasks={dependenciesByTask.blockedBy.get(task.id) || []}
-                  dateDependency={dateDependencies.find(dep => dep.task_id === task.id)}
-                  availableTasks={items.filter(i => {
-                    const enhancedItemForAvailable = entry({
-                      partial: {id: i.id}, 
-                      items, 
-                      setItems,
-                      taskDependencies: dependencies,
-                      setTaskDependencies: setDependencies,
-                      dateDependencies,
-                      setDateDependencies
-                    });
-                    return enhancedItemForAvailable !== null;
-                  }).map(i => {
-                    // We already filtered out nulls above
-                    return entry({
-                      partial: {id: i.id}, 
-                      items, 
-                      setItems,
-                      taskDependencies: dependencies,
-                      setTaskDependencies: setDependencies,
-                      dateDependencies,
-                      setDateDependencies
-                    })!; // Safe to use ! here
-                  })}
-                  isSearchMatch={
-                    !!searchQuery.trim() && 
-                    searchMatchingItemIds.has(task.id) && 
-                    !!(
-                      (task.title && task.title.toLowerCase().includes(searchQuery.toLowerCase().trim())) ||
-                      (task.description && task.description.toLowerCase().includes(searchQuery.toLowerCase().trim()))
-                    )
-                  }
-                  searchQuery={searchQuery}
-                  breadcrumbs={enhancedBreadcrumbs}
-                  onNavigate={onFocus}
-                />
-              </div>
-              {/* Add a drop zone after each item */}
-              <DropZone
-                parentId={task.parent_id}
-                position={task.position + 1}
-                onMoveItemToPosition={onMoveItemToPosition}
-                isAnyItemEditing={isAnyItemEditing}
-              />
-            </div>
-          )
-        })}
+        {sortedItems.map((item, index) => (
+          <div key={item.id} className="py-0.5">
+            {renderItem(item, index, item.parent_id)}
+          </div>
+        ))}
       </div>
     )
   }
 
   return (
-    <div className="relative space-y-2">
-      {focusedItemId && !searchQuery.trim() && (
-        <Breadcrumb
-          items={getItemAncestry(focusedItemId)}
-          onNavigate={onFocus}
-        />
-      )}
-      {viewMode === 'tree' ? (
-        <div className="space-y-0.5">
-          {focusedItemId && !searchQuery.trim() ? (
-            // When focused and not searching, render the focused item first, then its children
-            <>
-              {(() => {
-                const focusedItem = items.find(item => item.id === focusedItemId);
-                if (!focusedItem) return null;
-
-                const childItems = itemsByParent.get(focusedItem.id) || [];
-                const hasChildren = childItems.length > 0;
-                
-                // Enhance the focused item
-                const enhancedFocusedItem = entry({
-                  partial: {id: focusedItem.id}, 
-                  items, 
-                  setItems,
-                  taskDependencies: dependencies,
-                  setTaskDependencies: setDependencies,
-                  dateDependencies,
-                  setDateDependencies
-                });
-                
-                if (!enhancedFocusedItem) {
-                  return null; // Skip rendering if we couldn't enhance the focused item
-                }
-
-                // Recursively render children
-                const itemChildren = hasChildren ? (
-                  <div className="space-y-0.5 ml-6 mt-2">
-                    {renderTreeView(focusedItem.id)}
-                  </div>
-                ) : null;
-
-                return (
-                  <div key={focusedItem.id} className="py-0.5">
-                    <ItemComponent
-                      item={enhancedFocusedItem}
-                      onAddChild={onAddChild}
-                      onToggleComplete={onToggleComplete}
-                      onFocus={onFocus}
-                      onAddDependency={onAddDependency}
-                      onRemoveDependency={onRemoveDependency}
-                      onAddDateDependency={onAddDateDependency}
-                      onRemoveDateDependency={onRemoveDateDependency}
-                      onCreateSubtask={createSubtask}
-                      onUpdateSubtask={onUpdateSubtask}
-                      onEditingChange={(isEditing) => setIsAnyItemEditing(isEditing)}
-                      siblingCount={childItems.length}
-                      itemPosition={0}
-                      hasChildren={hasChildren}
-                      childCount={childItems.length}
-                      blockingTasks={dependenciesByTask.blocking.get(focusedItem.id) || []}
-                      blockedByTasks={dependenciesByTask.blockedBy.get(focusedItem.id) || []}
-                      dateDependency={dateDependencies.find(dep => dep.task_id === focusedItem.id)}
-                      availableTasks={items.filter(i => {
-                        const enhancedItemForAvailable = entry({
-                          partial: {id: i.id}, 
-                          items, 
-                          setItems,
-                          taskDependencies: dependencies,
-                          setTaskDependencies: setDependencies,
-                          dateDependencies,
-                          setDateDependencies
-                        });
-                        return enhancedItemForAvailable !== null;
-                      }).map(i => {
-                        // We already filtered out nulls above
-                        return entry({
-                          partial: {id: i.id}, 
-                          items, 
-                          setItems,
-                          taskDependencies: dependencies,
-                          setTaskDependencies: setDependencies,
-                          dateDependencies,
-                          setDateDependencies
-                        })!; // Safe to use ! here
-                      })}
-                      isSearchMatch={false}
-                      searchQuery={searchQuery}
-                    >
-                      {itemChildren}
-                    </ItemComponent>
-                  </div>
-                );
-              })()}
-            </>
-          ) : (
-            // Normal tree view (not focused or searching)
-            renderTreeView()
-          )}
-        </div>
-      ) : renderListView()}
+    <div className="space-y-0.5">
+      {(() => {
+        console.log('Rendering view mode:', viewMode);
+        return viewMode === 'tree' ? renderTreeView() : renderListView();
+      })()}
     </div>
   )
 } 

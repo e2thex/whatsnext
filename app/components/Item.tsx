@@ -1,19 +1,24 @@
 import { type ReactNode, useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useDrag } from 'react-dnd'
-import { type Database, type ItemType as DbItemType } from '../../src/lib/supabase/client'
+import { type Database } from '../../src/lib/supabase/client'
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog'
 import { DependencySelectionDialog } from './DependencySelectionDialog'
 import { toast } from 'react-hot-toast'
 import { renderMarkdown } from '@/src/utils/markdown'
 import typeIcons, { typeColors, typeRingColors } from './typeIcons'
-import { Item as ItemModel } from './types'
+import { ItemTypes } from './ItemTypes'
+import type { ItemType, Dependency, Item } from '@/app/types'
 
 type TaskDependencyRow = Database['public']['Tables']['task_dependencies']['Row']
 type DateDependencyRow = Database['public']['Tables']['date_dependencies']['Row']
 
+const isItemType = (type: ItemType | null | undefined, value: ItemType): boolean => {
+  return type === value
+}
+
 interface ItemProps {
-  item: ItemModel
+  item: Item
   onAddChild: (parentId: string | null) => void
   onToggleComplete: (id: string) => void
   onFocus: (id: string | null) => void
@@ -25,29 +30,22 @@ interface ItemProps {
   onUpdateSubtask?: (subtaskId: string, updates: { title: string; position: number }) => void
   onEditingChange?: (isEditing: boolean) => void
   siblingCount: number
-  itemPosition: number
-  children?: ReactNode
-  hasChildren?: boolean
-  childCount?: number
-  blockingTasks?: TaskDependencyRow[]
-  blockedByTasks?: TaskDependencyRow[]
-  dateDependency?: DateDependencyRow
-  availableTasks?: ItemModel[]
   isSearchMatch?: boolean
-  breadcrumbs?: ItemModel[]
+  breadcrumbs?: Item[]
   onNavigate?: (id: string | null) => void
   searchQuery?: string
+  viewMode: 'tree' | 'list'
 }
 
 interface DragItem {
   id: string
-  type: 'ITEM'
+  type: typeof ItemTypes.ITEM
   parentId: string | null
   position: number
 }
 
 export function Item({ 
-  item: rawItem, 
+  item, 
   onAddChild, 
   onToggleComplete, 
   onFocus,
@@ -59,76 +57,12 @@ export function Item({
   onUpdateSubtask,
   onEditingChange,
   siblingCount,
-  itemPosition,
-  children,
-  hasChildren = false,
-  childCount = 0,
-  blockingTasks = [],
-  blockedByTasks = [],
-  dateDependency,
-  availableTasks = [],
   isSearchMatch = false,
   breadcrumbs = [],
   onNavigate,
-  searchQuery = ''
+  searchQuery = '',
+  viewMode
 }: ItemProps) {
-  // Transform the raw item into a valid ItemModel if it doesn't have all required properties
-  const item = useMemo(() => {
-    // Check if item already has the required properties
-    if (typeof rawItem.update === 'function' && 
-        'dependencies' in rawItem && 
-        'subItems' in rawItem && 
-        'isCollapsed' in rawItem && 
-        'isBlocked' in rawItem && 
-        'blockedCount' in rawItem) {
-      // Item is already a valid ItemModel
-      return rawItem;
-    }
-    
-    // Create a new item with default implementations for missing properties
-    // Calculate if item is blocked based on dependencies and date dependencies
-    const directlyBlocked = blockedByTasks.some(dep => {
-      const blockingTask = availableTasks?.find(t => t.id === dep.blocking_task_id);
-      return blockingTask && !blockingTask.completed;
-    });
-    
-    const dateBlocked = dateDependency ? new Date(dateDependency.unblock_at) > new Date() : false;
-    const isBlocked = directlyBlocked || dateBlocked || (hasChildren && childCount > 0 && availableTasks.filter(t => t.parent_id === rawItem.id).every(child => !child.completed));
-    
-    const enhancedItem: ItemModel = {
-      ...rawItem,
-      // Default implementations for missing properties
-      dependencies: [],
-      subItems: [],
-      isCollapsed: false,
-      isBlocked: isBlocked,
-      blockedCount: blockedByTasks.length + (dateDependency ? 1 : 0),
-      // Default update implementation that calls onUpdateItem and returns the updated item
-      update: (partial: Partial<ItemModel>) => {
-        // Only apply updates to properties that existed in the original item
-        const itemUpdates: { title?: string; description?: string } = {};
-        if ('title' in partial) itemUpdates.title = partial.title as string | undefined;
-        if ('description' in partial) itemUpdates.description = partial.description as string | undefined;
-        
-        // Call the update logic
-        // Note: Since we've removed onUpdateItem, we'll need to implement alternative logic
-        // This will be handled by the consuming component
-        
-        // Return a new object with the updates applied
-        return {
-          ...enhancedItem,
-          ...partial,
-        };
-      },
-      // Default delete implementation
-      delete: (deleteChildren: boolean) => {
-        console.warn('Delete method is not implemented in fallback item');
-      }
-    };
-    
-    return enhancedItem;
-  }, [rawItem, hasChildren, childCount, blockedByTasks, dateDependency, availableTasks]);
-
   const [isCollapsed, setIsCollapsed] = useState(item.isCollapsed)
   const [isEditing, setIsEditing] = useState(item.title === '')
   const [editedContent, setEditedContent] = useState(item.description 
@@ -140,7 +74,7 @@ export function Item({
   const [isDependencySelectionOpen, setIsDependencySelectionOpen] = useState(false)
   const [isDateDependencyOpen, setIsDateDependencyOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(
-    dateDependency ? new Date(dateDependency.unblock_at) : null
+    item.dateDependency ? new Date(item.dateDependency.unblock_at) : null
   )
   
   const [showDepSuggestions, setShowDepSuggestions] = useState(false)
@@ -156,7 +90,7 @@ export function Item({
   const depSuggestionsRef = useRef<HTMLDivElement>(null)
 
   const [deletingSubtaskId, setDeletingSubtaskId] = useState<string | null>(null);
-  const [, setCurrentChildItems] = useState<ItemModel[]>([]);
+  const [, setCurrentChildItems] = useState<Item[]>([]);
   const [deletedSubtasksQueue, setDeletedSubtasksQueue] = useState<{ id: string, title: string }[]>([]);
   const [isProcessingDeletion, setIsProcessingDeletion] = useState(false);
   
@@ -179,32 +113,18 @@ export function Item({
     setIsCollapsed(item.isCollapsed);
   }, [item.isCollapsed]);
 
-  const updateItem = (updates: Partial<ItemModel>) => {
-    if (typeof item.update === 'function') {
-      item.update(updates);
-    } else {
-      console.warn('Item update method is not available');
-      // Fallback: we could add alternative update logic here if needed
-    }
+  const updateItem = (updates: Partial<Item>) => {
+    item.update(updates);
   };
 
   useEffect(() => {
-    if (isEditing && hasChildren) {
-      if (item.subItems.length > 0) {
-        const childItems = availableTasks
-          .filter(task => task.id && item.subItems.some(subItem => subItem.id === task.id))
-          .sort((a, b) => a.position - b.position);
-        
-        setCurrentChildItems(childItems);
-      } else {
-        const childItems = availableTasks
-          .filter(task => task.parent_id === item.id)
-          .sort((a, b) => a.position - b.position);
-        
-        setCurrentChildItems(childItems);
-      }
+    if (isEditing && item.subItems.length > 0) {
+      const childItems = item.entries({ parent_id: item.id })
+        .sort((a, b) => a.position - b.position);
+      
+      setCurrentChildItems(childItems);
     }
-  }, [isEditing, hasChildren, item.id, item.subItems, availableTasks]);
+  }, [isEditing, item.subItems]);
 
   const handleTextareaResize = () => {
     if (contentInputRef.current) {
@@ -214,10 +134,10 @@ export function Item({
   };
 
   const formatDependenciesForEditing = () => {
-    if (blockedByTasks.length === 0) return '';
+    if (item.blockedBy.length === 0) return '';
     
-    const depLines = blockedByTasks.map(dep => {
-      const blockingTask = availableTasks?.find(t => t.id === dep.blocking_task_id);
+    const depLines = item.blockedBy.map(dep => {
+      const blockingTask = item.entries({ id: dep.id })[0];
       if (!blockingTask) return '';
       return `@[${blockingTask.title}](#${blockingTask.id})`;
     }).filter(Boolean);
@@ -226,12 +146,11 @@ export function Item({
   };
 
   const formatChildItemsForEditing = () => {
-    if (!hasChildren || childCount === 0) {
+    if (item.subItems.length === 0) {
       return '';
     }
     
-    const childItems = availableTasks
-      .filter(task => task.parent_id === item.id)
+    const childItems = item.entries({ parent_id: item.id })
       .sort((a, b) => a.position - b.position);
     
     if (childItems.length === 0) {
@@ -242,9 +161,7 @@ export function Item({
       `- [${childItem.title}](#${childItem.id})`
     );
     
-    const formattedList = listItems.join('\n');
-    
-    return formattedList;
+    return listItems.join('\n');
   };
   
   useEffect(() => {
@@ -405,7 +322,7 @@ export function Item({
   const formatParentForEditing = () => {
     if (!item.parent_id) return '';
     
-    const parentItem = availableTasks?.find(t => t.id === item.parent_id);
+    const parentItem = item.entries({ id: item.parent_id })[0];
     if (!parentItem) return '';
     
     return `^[${parentItem.title}](#${parentItem.id})`;
@@ -607,27 +524,27 @@ export function Item({
   };
   
   const filteredTasks = useMemo(() => {
-    return availableTasks
+    return item.entries({ completed: false })
       .filter(task => 
         task.id !== item.id && 
         task.title.toLowerCase().includes(filterText.toLowerCase())
       )
       .sort((a, b) => a.title.localeCompare(b.title))
       .slice(0, 10);
-  }, [availableTasks, item.id, filterText]);
+  }, [item.id, filterText]);
 
   const filteredParentTasks = useMemo(() => {
-    return availableTasks
+    return item.entries({ completed: false })
       .filter(task => 
         task.id !== item.id && 
-        !task.parent_id || (task.parent_id && task.parent_id !== item.id) &&
+        (!task.parent_id || (task.parent_id && task.parent_id !== item.id)) &&
         task.title.toLowerCase().includes(parentFilterText.toLowerCase())
       )
       .sort((a, b) => a.title.localeCompare(b.title))
       .slice(0, 10);
-  }, [availableTasks, item.id, parentFilterText]);
+  }, [item.id, parentFilterText]);
 
-  const insertDependency = (task: ItemModel) => {
+  const insertDependency = (task: Item) => {
     if (!contentInputRef.current) return;
     
     const textarea = contentInputRef.current;
@@ -660,7 +577,7 @@ export function Item({
     setShowDepSuggestions(false);
   };
 
-  const insertParent = (task: ItemModel) => {
+  const insertParent = (task: Item) => {
     if (!contentInputRef.current) return;
     
     const textarea = contentInputRef.current;
@@ -717,8 +634,7 @@ export function Item({
       updateItem({ parent_id: null });
     }
     
-    const currentSubtasks = availableTasks
-      .filter(task => task.parent_id === item.id)
+    const currentSubtasks = item.entries({ parent_id: item.id })
       .map(task => ({ id: task.id, title: task.title }));
     
     const subtasksToProcess: { id?: string, title: string, position: number }[] = [];
@@ -771,7 +687,10 @@ export function Item({
       if (!subtask.id) {
         item.create({title: subtask.title, parent_id: item.id, position: subtask.position});
       } else {
-        item.entry({id:subtask.id})?.update({title: subtask.title, position: subtask.position});  
+        const existingSubtask = item.entry(subtask.id);
+        if (existingSubtask) {
+          existingSubtask.update({title: subtask.title, position: subtask.position});
+        }
       }
     });
   };
@@ -781,25 +700,31 @@ export function Item({
     description?: string, 
     dependencies?: {id: string, title: string}[]
   ) => {
-    const updates: Partial<ItemModel> = { 
+    const updates: Partial<Item> = { 
       title, 
       description 
     };
     
-    if (typeof item.update === 'function') {
-      item.update(updates);
-    } else {
-      console.warn('Item update method is not available');
-    }
+    item.update(updates);
     
     if (dependencies) {
       dependencies.forEach(dep => {
-        const existingDep = blockedByTasks.find(
-          blockDep => blockDep.blocking_task_id === dep.id
+        const existingDep = item.blockedBy.find(
+          blockDep => blockDep.id === dep.id
         );
         
         if (!existingDep) {
-          onAddDependency(dep.id, item.id);
+          const newDependency: Dependency = {
+            type: 'task',
+            data: {
+              id: dep.id,
+              blocking_task_id: dep.id,
+              blocked_task_id: item.id,
+              created_at: new Date().toISOString(),
+              user_id: item.user_id || ''
+            }
+          };
+          item.update({ blockedBy: [...item.blockedBy, newDependency] });
         }
       });
     }
@@ -810,7 +735,10 @@ export function Item({
 
   const handleDeleteSubtaskConfirmed = (deleteChildren: boolean) => {
     if (deletingSubtaskId) {
-      item.entry({id:deletingSubtaskId})?.delete(deleteChildren);
+      const subtask = item.entry(deletingSubtaskId);
+      if (subtask) {
+        subtask.delete(deleteChildren);
+      }
       
       const updatedQueue = deletedSubtasksQueue.filter(s => s.id !== deletingSubtaskId);
       setDeletedSubtasksQueue(updatedQueue);
@@ -843,19 +771,18 @@ export function Item({
     }
   };
 
-  const [{ isDragging }, drag] = useDrag<DragItem, unknown, { isDragging: boolean }>({
-    type: 'ITEM',
-    item: {
+  const [{ isDragging }, drag] = useDrag({
+    type: ItemTypes.ITEM,
+    item: { 
+      type: ItemTypes.ITEM,
       id: item.id,
-      type: 'ITEM',
       parentId: item.parent_id,
       position: item.position
-    },
+    } as DragItem,
     collect: (monitor) => ({
       isDragging: monitor.isDragging()
-    }),
-    canDrag: () => !isEditing
-  })
+    })
+  });
 
   const setDragRef = useCallback((node: HTMLDivElement | null) => {
     drag(node)
@@ -865,9 +792,8 @@ export function Item({
   const displayDescription = item.description
   
   const effectiveType = item.type || (() => {
-    if (!hasChildren) return 'Task' as DbItemType
-    if (childCount === 0) return 'Task' as DbItemType
-    return 'Mission' as DbItemType
+    if (item.subItems.length === 0) return 'task' as ItemType
+    return 'task' as ItemType
   })()
 
   const highlightMatchingText = (text: string, searchQuery: string) => {
@@ -914,6 +840,9 @@ export function Item({
     }
   }, [isEditing, onEditingChange]);
 
+  const hasChildren = item.subItems.length > 0;
+  const childCount = item.subItems.length;
+
   return (
     <div className={`
       relative group
@@ -958,7 +887,7 @@ export function Item({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onToggleComplete(item.id);
+                item.update({ completed: !item.completed });
               }}
               disabled={item.isBlocked}
               className={`
@@ -1089,7 +1018,7 @@ export function Item({
                             ${item.isBlocked ? 'bg-red-500' : 'bg-green-500'}
                           `}
                         >
-                          {item.isBlocked ? blockedByTasks.length + (dateDependency ? 1 : 0) : blockingTasks.length}
+                          {item.isBlocked ? item.blockedBy.length + (item.dateDependency ? 1 : 0) : item.blockedBy.length}
                         </div>
                       </button>
                       <span className="font-medium cursor-text hover:text-gray-600">
@@ -1139,7 +1068,7 @@ export function Item({
                   item.update({position: item.position+1});
                   item.entries({position: item.position+1, parent_id: item.parent_id})[0]?.update({position: item.position});
                 }}
-                disabled={itemPosition === 0}
+                disabled={item.position === 0}
                 className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
               >
                 <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
@@ -1152,7 +1081,7 @@ export function Item({
                   item.update({position: item.position-1});
                   item.entries({position: item.position-1, parent_id: item.parent_id})[0]?.update({position: item.position});
                 }}
-                disabled={itemPosition === siblingCount - 1}
+                disabled={item.position === siblingCount - 1}
                 className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
               >
                 <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
@@ -1203,14 +1132,35 @@ export function Item({
           </div>
         </div>
 
-        {children && (
+        {hasChildren && (
           <div 
             className={`
               mt-2 ml-6 space-y-2 overflow-hidden transition-all duration-200 ease-in-out
               ${isCollapsed ? 'h-0 mt-0 opacity-0' : 'opacity-100'}
             `}
           >
-            {children}
+            {item.subItems.map((child, index) => (
+              <Item
+                key={child.id}
+                item={child}
+                onAddChild={onAddChild}
+                onToggleComplete={onToggleComplete}
+                onFocus={onFocus}
+                onAddDependency={onAddDependency}
+                onRemoveDependency={onRemoveDependency}
+                onAddDateDependency={onAddDateDependency}
+                onRemoveDateDependency={onRemoveDateDependency}
+                onCreateSubtask={onCreateSubtask}
+                onUpdateSubtask={onUpdateSubtask}
+                onEditingChange={onEditingChange}
+                siblingCount={siblingCount}
+                isSearchMatch={isSearchMatch}
+                breadcrumbs={[...breadcrumbs, item]}
+                onNavigate={onNavigate}
+                searchQuery={searchQuery}
+                viewMode={viewMode}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -1238,39 +1188,21 @@ export function Item({
             </button>
             <button 
               onClick={() => {
-                updateItem({ type: 'Task' as DbItemType, manual_type: true })
+                updateItem({ type: 'task', manual_type: true })
                 setIsTypeMenuOpen(false)
               }}
-              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Task' as DbItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
+              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === 'task' ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
             >
               Task
             </button>
             <button 
               onClick={() => {
-                updateItem({ type: 'Mission' as DbItemType, manual_type: true })
+                updateItem({ type: 'mission', manual_type: true })
                 setIsTypeMenuOpen(false)
               }}
-              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Mission' as DbItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
+              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === 'mission' ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
             >
               Mission
-            </button>
-            <button 
-              onClick={() => {
-                updateItem({ type: 'Objective' as DbItemType, manual_type: true })
-                setIsTypeMenuOpen(false)
-              }}
-              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Objective' as DbItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
-            >
-              Objective
-            </button>
-            <button 
-              onClick={() => {
-                updateItem({ type: 'Ambition' as DbItemType, manual_type: true })
-                setIsTypeMenuOpen(false)
-              }}
-              className={`w-full text-left px-2 py-1 rounded text-sm ${item.type === ('Ambition' as DbItemType) ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}
-            >
-              Ambition
             </button>
           </div>
         </div>,
@@ -1301,11 +1233,11 @@ export function Item({
           className="w-64 bg-white rounded-lg shadow-lg z-[9999] border border-gray-200"
         >
           <div className="p-2">
-            {blockedByTasks.length > 0 && (
+            {item.blockedBy.length > 0 && (
               <div className="mb-2">
                 <h3 className="text-xs font-medium text-gray-500 mb-1">Blocked by tasks:</h3>
-                {blockedByTasks.map(dep => {
-                  const blockingTask = availableTasks?.find(t => t.id === dep.blocking_task_id)
+                {item.blockedBy.map(dep => {
+                  const blockingTask = item.entries({ id: dep.id })[0];
                   const isCompleted = blockingTask?.completed
                   return (
                     <div key={dep.id} className="flex items-center justify-between text-sm text-gray-700 py-1">
@@ -1318,7 +1250,10 @@ export function Item({
                         {blockingTask?.title || 'Unknown task'}
                       </span>
                       <button
-                        onClick={() => onRemoveDependency(dep.blocking_task_id, item.id)}
+                        onClick={() => {
+                          const updatedDependencies = item.blockedBy.filter((d: Dependency) => d.id !== dep.id);
+                          item.update({ blockedBy: updatedDependencies });
+                        }}
                         className="text-red-600 hover:text-red-700 whitespace-nowrap"
                       >
                         Remove
@@ -1329,11 +1264,11 @@ export function Item({
               </div>
             )}
             
-            {blockingTasks.length > 0 && (
+            {item.blockedBy.length > 0 && (
               <div className="mb-2">
                 <h3 className="text-xs font-medium text-gray-500 mb-1">Blocking tasks:</h3>
-                {blockingTasks.map(dep => {
-                  const blockedTask = availableTasks?.find(t => t.id === dep.blocked_task_id)
+                {item.blockedBy.map(dep => {
+                  const blockedTask = item.entries({ id: dep.id })[0];
                   const isCompleted = blockedTask?.completed
                   return (
                     <div key={dep.id} className="flex items-center justify-between text-sm text-gray-700 py-1">
@@ -1346,7 +1281,10 @@ export function Item({
                         {blockedTask?.title || 'Unknown task'}
                       </span>
                       <button
-                        onClick={() => onRemoveDependency(item.id, dep.blocked_task_id)}
+                        onClick={() => {
+                          const updatedDependencies = item.blockedBy.filter((d: Dependency) => d.id !== dep.id);
+                          item.update({ blockedBy: updatedDependencies });
+                        }}
                         className="text-red-600 hover:text-red-700 whitespace-nowrap"
                       >
                         Remove
@@ -1357,7 +1295,7 @@ export function Item({
               </div>
             )}
 
-            {blockingTasks.length === 0 && blockedByTasks.length === 0 && !dateDependency && (
+            {item.blockedBy.length === 0 && item.dateDependency && (
               <p className="text-sm text-gray-500 py-1">No dependencies</p>
             )}
 
@@ -1375,13 +1313,15 @@ export function Item({
 
             <div className="mt-2 pt-2 border-t border-gray-100">
               <h3 className="text-xs font-medium text-gray-500 mb-1">Date dependency:</h3>
-              {dateDependency ? (
+              {item.dateDependency ? (
                 <div className="flex items-center justify-between text-sm text-gray-700 py-1">
                   <span className="truncate flex-1 mr-2">
-                    Blocked until {new Date(dateDependency.unblock_at).toLocaleDateString()}
+                    Blocked until {new Date(item.dateDependency.unblock_at).toLocaleDateString()}
                   </span>
                   <button
-                    onClick={() => onRemoveDateDependency(item.id)}
+                    onClick={() => {
+                      item.update({ dateDependency: null });
+                    }}
                     className="text-red-600 hover:text-red-700 whitespace-nowrap"
                   >
                     Remove
@@ -1430,7 +1370,7 @@ export function Item({
               <button
                 onClick={() => {
                   if (selectedDate) {
-                    onAddDateDependency(item.id, selectedDate)
+                    item.update({ dateDependency: { unblock_at: selectedDate.toISOString() } });
                     setIsDateDependencyOpen(false)
                     setSelectedDate(null)
                   }
@@ -1448,7 +1388,19 @@ export function Item({
       <DependencySelectionDialog
         isOpen={isDependencySelectionOpen}
         onClose={() => setIsDependencySelectionOpen(false)}
-        onSelect={(taskId) => onAddDependency(taskId, item.id)}
+        onSelect={(taskId) => {
+          const newDependency: Dependency = {
+            type: 'task',
+            data: {
+              id: taskId,
+              blocking_task_id: taskId,
+              blocked_task_id: item.id,
+              created_at: new Date().toISOString(),
+              user_id: item.user_id || ''
+            }
+          };
+          item.update({ blockedBy: [...item.blockedBy, newDependency] });
+        }}
         currentTaskId={item.id}
         availableTasks={filteredTasks}
       />
@@ -1465,9 +1417,9 @@ export function Item({
           onConfirm={(deleteChildren) => {
             handleDeleteSubtaskConfirmed(deleteChildren);
           }}
-          hasChildren={!!availableTasks.some(task => task.parent_id === deletingSubtaskId)}
+          hasChildren={!!item.entries({ parent_id: deletingSubtaskId }).length > 0}
           itemTitle={deletedSubtasksQueue.find(s => s.id === deletingSubtaskId)?.title || 'Unknown Subtask'}
-          childCount={availableTasks.filter(task => task.parent_id === deletingSubtaskId).length}
+          childCount={item.entries({ parent_id: deletingSubtaskId }).length}
         />
       )}
 

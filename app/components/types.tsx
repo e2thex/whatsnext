@@ -20,6 +20,7 @@ export type Item = ItemRow & {
     isBlocked: boolean,
     blockedCount: number,
     blocking: TaskDependencyRow[],
+    isCollapsed: boolean,
     update: (partial: Partial<Item>) => Promise<Item|null>,
     delete: (deleteChildren: boolean) => Promise<void>,
     entry: (partial: Partial<ItemRow>) => Item | null,
