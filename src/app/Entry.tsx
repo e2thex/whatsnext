@@ -1,42 +1,8 @@
-import { Item } from "@/app/components/types"
+import { Item, ItemRow, TaskDependencyRow, DateDependencyRow, DB, Dependency } from "@/app/components/types"
 import { Database, supabase } from "../lib/supabase/client"
 import { whatChanged } from "../utils/objectUtils"
 // Assuming the Item component is missing or incorrectly imported, we'll remove it for now.
-type DBItem = Database['public']['Tables']['items']['Row']
-type TaskDependency = Database['public']['Tables']['task_dependencies']['Row']
-type DateDependency = Database['public']['Tables']['date_dependencies']['Row']
 
-type TaskDependencyData = {
-  id: string;
-  blocking_task_id: string;
-  blocked_task_id: string;
-  user_id: string;
-};
-
-type DateDependencyData = {
-  id: string;
-  task_id: string;
-  unblock_at: string;
-  user_id: string;
-};
-
-type Dependency = {
-  type: 'Task';
-  data: TaskDependencyData;
-} | {
-  type: 'Date';
-  data: DateDependencyData;
-};
-
-export type DB = {
-  create: (partial: Partial<Item>) => Promise<Item|null>,
-  entries: (partial: Partial<Item>) => Item[],
-  entry: (partial: Partial<Item>) => Item | undefined,
-  delete: (partial: Partial<Item>, deleteChildren: boolean) => Promise<void>,
-  update: (item: Item, updates: Partial<Item>) => Promise<Item|null>,
-  setEntries: (entries: Item[]) => void,
-  userId: string,
-}
 export const populateEntries = async (db:DB) => {
     try {
         console.log('Starting to populate entries...');
@@ -83,11 +49,11 @@ export const populateEntries = async (db:DB) => {
         }
 
         console.log('Creating entities from fetched data...');
-        const entries = items.map((item: DBItem) => entityFactory({
+        const entries = items.map((item: ItemRow) => entityFactory({
             item, 
             items, 
-            taskDependencies: dependenciesData as TaskDependency[], 
-            dateDependencies: dateDependenciesData as DateDependency[],
+            taskDependencies: dependenciesData as TaskDependencyRow[], 
+            dateDependencies: dateDependenciesData as DateDependencyRow[],
             db: db as unknown as DB
         }))
         console.log('Setting entries:', entries.length);
@@ -128,11 +94,11 @@ export const db = ({entries, setEntries, userId}: {entries: Item[], setEntries: 
     },
     entries: (partial: Partial<Item>) => (
       entries
-      .filter(i => Object.keys(partial).every(key => i[key as keyof DBItem] === partial[key as keyof DBItem]))
+      .filter(i => Object.keys(partial).every(key => i[key as keyof Item] === partial[key as keyof Item]))
     ),
     entry: (partial: Partial<Item>) => (
       entries
-      .find(i => Object.keys(partial).every(key => i[key as keyof DBItem] === partial[key as keyof DBItem]))
+      .find(i => Object.keys(partial).every(key => i[key as keyof Item] === partial[key as keyof Item]))
     ),
     delete: async (partial: Partial<Item>, deleteChildren: boolean) => {
       try {
@@ -218,7 +184,7 @@ export const db = ({entries, setEntries, userId}: {entries: Item[], setEntries: 
               const { error: taskDepError } = await supabase
                 .from('task_dependencies')
                 .insert({
-                  blocking_task_id: (dep.data as TaskDependencyData).blocking_task_id,
+                  blocking_task_id: (dep.data as TaskDependencyRow).blocking_task_id,
                   blocked_task_id: item.id,
                   user_id: userId
                 });
@@ -231,7 +197,7 @@ export const db = ({entries, setEntries, userId}: {entries: Item[], setEntries: 
                 .from('date_dependencies')
                 .upsert({
                   task_id: item.id,
-                  unblock_at: (dep.data as DateDependencyData).unblock_at,
+                  unblock_at: (dep.data as DateDependencyRow).unblock_at,
                   user_id: userId
                 });
               if (dateDepError) {
@@ -246,7 +212,7 @@ export const db = ({entries, setEntries, userId}: {entries: Item[], setEntries: 
               const { error: taskDepError } = await supabase
                 .from('task_dependencies')
                 .delete()
-                .eq('blocking_task_id', (dep.data as TaskDependencyData).blocking_task_id)
+                .eq('blocking_task_id', (dep.data as TaskDependencyRow).blocking_task_id)
                 .eq('blocked_task_id', item.id)
                 .eq('user_id', userId);
               if (taskDepError) {
@@ -274,14 +240,14 @@ export const db = ({entries, setEntries, userId}: {entries: Item[], setEntries: 
         if (updates.blockedBy) {
           updates.blockedBy.forEach(dep => {
             if (dep.type === 'Task') {
-              affectedItemIds.add((dep.data as TaskDependencyData).blocking_task_id);
+              affectedItemIds.add((dep.data as TaskDependencyRow).blocking_task_id);
             }
           });
         }
         
         const blockingItems = entries.filter(i => 
           i.blockedBy?.some(dep => 
-            dep.type === 'Task' && (dep.data as TaskDependencyData).blocking_task_id === item.id
+            dep.type === 'Task' && (dep.data as TaskDependencyRow).blocking_task_id === item.id
           )
         );
         blockingItems.forEach(i => affectedItemIds.add(i.id));
@@ -293,7 +259,7 @@ export const db = ({entries, setEntries, userId}: {entries: Item[], setEntries: 
             return {
               ...i,
               blockedBy: i.blockedBy?.map(dep => {
-                if (dep.type === 'Task' && (dep.data as TaskDependencyData).blocking_task_id === item.id) {
+                if (dep.type === 'Task' && (dep.data as TaskDependencyRow).blocking_task_id === item.id) {
                   return { ...dep, data: { ...dep.data } };
                 }
                 return dep;
@@ -315,7 +281,7 @@ export const db = ({entries, setEntries, userId}: {entries: Item[], setEntries: 
   return db;
 }
 
-const entityFactory = ({item, items, taskDependencies, dateDependencies, db}: {item: DBItem, items: DBItem[], taskDependencies: TaskDependency[], dateDependencies: DateDependency[], db: DB}):Item => {
+const entityFactory = ({item, items, taskDependencies, dateDependencies, db}: {item: ItemRow, items: ItemRow[], taskDependencies: TaskDependencyRow[], dateDependencies: DateDependencyRow[], db: DB}):Item => {
   const blockedBy: Dependency[] = [
     ...taskDependencies.filter(dep => dep.blocked_task_id === item.id).map(dep => ({
       type: 'Task' as const,

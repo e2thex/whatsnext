@@ -1,14 +1,14 @@
 import { type ReactNode, useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useDrag } from 'react-dnd'
-import { type Database } from '../../src/lib/supabase/client'
+import { type Database } from '@/src/lib/supabase/client'
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog'
 import { DependencySelectionDialog } from './DependencySelectionDialog'
 import { toast } from 'react-hot-toast'
 import { renderMarkdown } from '@/src/utils/markdown'
 import typeIcons, { typeColors, typeRingColors } from './typeIcons'
 import { ItemTypes } from './ItemTypes'
-import type { ItemType, Dependency, Item } from '@/app/types'
+import type { Item, Dependencies, SubItem, ItemType } from './types'
 
 type TaskDependencyRow = Database['public']['Tables']['task_dependencies']['Row']
 type DateDependencyRow = Database['public']['Tables']['date_dependencies']['Row']
@@ -19,22 +19,15 @@ const isItemType = (type: ItemType | null | undefined, value: ItemType): boolean
 
 interface ItemProps {
   item: Item
-  onAddChild: (parentId: string | null) => void
-  onToggleComplete: (id: string) => void
-  onFocus: (id: string | null) => void
-  onAddDependency: (blockingTaskId: string, blockedTaskId: string) => void
-  onRemoveDependency: (blockingTaskId: string, blockedTaskId: string) => void
-  onAddDateDependency: (taskId: string, unblockAt: Date) => void
-  onRemoveDateDependency: (taskId: string) => void
-  onCreateSubtask?: (parentId: string, title: string, position: number) => void
-  onUpdateSubtask?: (subtaskId: string, updates: { title: string; position: number }) => void
-  onEditingChange?: (isEditing: boolean) => void
-  siblingCount: number
-  isSearchMatch?: boolean
-  breadcrumbs?: Item[]
-  onNavigate?: (id: string | null) => void
+  onAddChild: (item: Item) => void
+  onToggleComplete: (item: Item) => void
+  onDelete: (item: Item, deleteChildren: boolean) => void
+  onUpdate: (item: Item) => void
+  onMove: (draggedItem: Item, targetItem: Item) => void
   searchQuery?: string
-  viewMode: 'tree' | 'list'
+  viewMode?: 'tree' | 'list'
+  index: number
+  db: Database
 }
 
 interface DragItem {
@@ -44,24 +37,35 @@ interface DragItem {
   position: number
 }
 
+const sortByTitle = (a: Item, b: Item): number => a.title.localeCompare(b.title)
+
+const getDependencyTitle = (dep: Dependencies[number]): string => {
+  if (dep.type === 'Task') {
+    const taskDep = dep.data as Database['public']['Tables']['task_dependencies']['Row']
+    return taskDep.blocking_task_id // We'll need to look up the title from the items table
+  } else {
+    const dateDep = dep.data as Database['public']['Tables']['date_dependencies']['Row']
+    return new Date(dateDep.unblock_at).toLocaleDateString()
+  }
+}
+
+const sortSubItems = (a: Item, b: Item): number => a.title.localeCompare(b.title)
+
+const handleAddChild = async (childItem: Item) => {
+  // ... existing code ...
+}
+
 export function Item({ 
   item, 
   onAddChild, 
   onToggleComplete, 
-  onFocus,
-  onAddDependency,
-  onRemoveDependency,
-  onAddDateDependency,
-  onRemoveDateDependency,
-  onCreateSubtask,
-  onUpdateSubtask,
-  onEditingChange,
-  siblingCount,
-  isSearchMatch = false,
-  breadcrumbs = [],
-  onNavigate,
+  onDelete,
+  onUpdate,
+  onMove,
   searchQuery = '',
-  viewMode
+  viewMode = 'tree',
+  index,
+  db
 }: ItemProps) {
   const [isCollapsed, setIsCollapsed] = useState(item.isCollapsed)
   const [isEditing, setIsEditing] = useState(item.title === '')
@@ -1094,7 +1098,7 @@ export function Item({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onAddChild(item.id);
+                  onAddChild(item);
                 }}
                 className="p-1 text-gray-500 hover:text-gray-700"
               >
@@ -1106,7 +1110,7 @@ export function Item({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onFocus(item.id);
+                  onFocus(item);
                 }}
                 className="p-1 text-gray-500 hover:text-gray-700"
                 title="Focus on this task"
