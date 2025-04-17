@@ -21,13 +21,8 @@ interface ItemProps {
   item: Item
   onAddChild: (item: Item) => void
   onToggleComplete: (item: Item) => void
-  onDelete: (item: Item, deleteChildren: boolean) => void
-  onUpdate: (item: Item) => void
-  onMove: (draggedItem: Item, targetItem: Item) => void
   searchQuery?: string
   viewMode?: 'tree' | 'list'
-  index: number
-  db: Database
 }
 
 interface DragItem {
@@ -59,13 +54,8 @@ export function Item({
   item, 
   onAddChild, 
   onToggleComplete, 
-  onDelete,
-  onUpdate,
-  onMove,
   searchQuery = '',
   viewMode = 'tree',
-  index,
-  db
 }: ItemProps) {
   const [isCollapsed, setIsCollapsed] = useState(item.isCollapsed)
   const [isEditing, setIsEditing] = useState(item.title === '')

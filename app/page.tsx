@@ -7,7 +7,7 @@ import { ItemList } from './components/ItemList'
 import { Toolbar } from './components/Toolbar'
 import { supabase, type Database } from '../src/lib/supabase/client'
 import { toast } from 'react-hot-toast'
-import { Item as Entry } from './components/types'
+import { Item as Entry } from '@/app/components/types'
 import { db, populateEntries } from '@/src/app/Entry'
 
 type Item = Database['public']['Tables']['items']['Row']
