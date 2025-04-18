@@ -1,14 +1,9 @@
 import { useMemo, useCallback, type ReactNode, useEffect, useState } from 'react'
 import { Item } from './Item'
 import { useDrop } from 'react-dnd'
-import { type Database } from '../../src/lib/supabase/client'
-import { Breadcrumb } from './Breadcrumb'
 import { useDragDropManager } from 'react-dnd'
 import { DateDependencyRow, Item as DbItem, Dependencies, TaskDependencyRow } from './types'
-import { Item as UiItem } from '@/app/types'
-import { db, type DB } from '@/src/app/Entry'
-import { supabase } from '@/src/lib/supabase/client'
-
+import { DB } from './types'
 
 const isTaskDependency = (dep: Dependencies[number]): dep is { type: 'Task', data: TaskDependencyRow } => {
   return dep.type === 'Task';
@@ -252,13 +247,13 @@ export function ItemList({
     await item.update({ position: newPosition, parent_id: parentId })
   }, [entries])
 
-  const onAddChild = useCallback(async (parentId: string | null) => {
+  const onAddChild = useCallback(async (item: DbItem) => {
     const newItem = await db.create({
       title: '',
       description: '',
       type: 'task',
-      parent_id: parentId,
-      position: itemsByParent.get(parentId)?.length || 0,
+      parent_id: item.id,
+      position: itemsByParent.get(item.id)?.length || 0,
       completed: false,
       user_id: db.userId
     })
@@ -268,12 +263,13 @@ export function ItemList({
     }
   }, [itemsByParent, db, onFocus])
 
-  const onToggleComplete = useCallback(async (id: string) => {
-    const item = entries.find(i => i.id === id)
-    if (!item) return
-
+  const onToggleComplete = useCallback(async (item: DbItem) => {
     await item.update({ completed: !item.completed })
-  }, [entries])
+  }, [])
+
+  const onFocusItem = useCallback((item: DbItem) => {
+    onFocus(item.id)
+  }, [onFocus])
 
   const onAddDependency = useCallback(async (blockingTaskId: string, blockedTaskId: string) => {
     const blockingTask = entries.find(i => i.id === blockingTaskId)
@@ -371,64 +367,16 @@ export function ItemList({
           isAnyItemEditing={isAnyItemEditing}
         />
         <Item
-          item={{
-            ...item,
-            type: item.type === 'task' ? 'task' : 'mission',
-            blockedBy: item.blockedBy.map(dep => {
-              if (isTaskDependency(dep)) {
-                return {
-                  type: 'Task' as const,
-                  data: {
-                    id: dep.data.blocking_task_id,
-                    created_at: dep.data.created_at,
-                    blocking_task_id: dep.data.blocking_task_id,
-                    blocked_task_id: dep.data.blocked_task_id,
-                    user_id: dep.data.user_id
-                  }
-                }
-              } else if (isDateDependency(dep)) {
-                return {
-                  type: 'Date' as const,
-                  data: {
-                    id: dep.data.task_id,
-                    created_at: dep.data.created_at,
-                    task_id: dep.data.task_id,
-                    unblock_at: dep.data.unblock_at,
-                    user_id: dep.data.user_id
-                  }
-                }
-              }
-              return {
-                type: 'Task' as const,
-                data: {
-                  id: '',
-                  created_at: new Date().toISOString(),
-                  blocking_task_id: '',
-                  blocked_task_id: '',
-                  user_id: ''
-                }
-              }
-            })
-          }}
-          itemPosition={index}
-          siblingCount={itemsByParent.get(parentId)?.length || 0}
+          item={item}
           onAddChild={onAddChild}
           onToggleComplete={onToggleComplete}
-          onFocus={onFocus}
-          onAddDependency={onAddDependency}
-          onRemoveDependency={onRemoveDependency}
-          onAddDateDependency={onAddDateDependency}
-          onRemoveDateDependency={onRemoveDateDependency}
-          hasChildren={itemsByParent.has(item.id)}
-          childCount={childCount.get(item.id) || 0}
-          blockingTasks={blockingTasks}
-          blockedByTasks={blockedByTasks}
-          dateDependency={dateDependency}
-          availableTasks={entries}
-          isSearchMatch={searchMatchingItemIds.has(item.id)}
+          searchQuery={searchQuery}
+          viewMode={viewMode}
+          onEditingChange={setIsAnyItemEditing}
           breadcrumbs={getItemAncestry(item.id)}
           onNavigate={onFocus}
-          searchQuery={searchQuery}
+          onFocus={onFocusItem}
+          siblingCount={itemsByParent.get(parentId)?.length || 0}
         />
       </div>
     )

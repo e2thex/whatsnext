@@ -8,6 +8,14 @@ import { renderMarkdown } from '@/src/utils/markdown'
 import typeIcons, { typeColors, typeRingColors } from './typeIcons'
 import { ItemTypes } from './ItemTypes'
 import type { Dependency, Item, ItemType } from './types'
+import { ItemEditor } from './ItemEditor'
+
+interface ProcessedContent {
+  title: string;
+  description?: string;
+  dependencies: { id: string; title: string }[];
+  subtasks: { id?: string; title: string; position: number }[];
+}
 
 interface ItemProps {
   item: Item
@@ -15,6 +23,11 @@ interface ItemProps {
   onToggleComplete: (item: Item) => void
   searchQuery?: string
   viewMode?: 'tree' | 'list'
+  onEditingChange?: (isEditing: boolean) => void
+  breadcrumbs?: { id: string; title: string }[]
+  onNavigate?: (id: string) => void
+  onFocus?: (item: Item) => void
+  siblingCount?: number
 }
 
 interface DragItem {
@@ -30,6 +43,11 @@ export function Item({
   onToggleComplete, 
   searchQuery = '',
   viewMode = 'tree',
+  onEditingChange,
+  breadcrumbs = [],
+  onNavigate,
+  onFocus,
+  siblingCount = 0
 }: ItemProps) {
   const [isCollapsed, setIsCollapsed] = useState(item.isCollapsed)
   const [isEditing, setIsEditing] = useState(item.title === '')
@@ -74,6 +92,8 @@ export function Item({
     dependencies: { id: string, title: string }[];
     subtasksToProcess?: { id?: string, title: string, position: number }[];
   } | null>(null);
+
+  const [isSearchMatch, setIsSearchMatch] = useState(false);
 
   useEffect(() => {
     setIsCollapsed(item.isCollapsed);
@@ -423,7 +443,12 @@ export function Item({
     
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      handleContentSubmit();
+      handleContentSubmit({ 
+        title: editedContent.split('\n')[0],
+        description: editedContent.split('\n').slice(1).join('\n'),
+        dependencies: [],
+        subtasks: []
+      });
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setEditedContent(item.description 
@@ -576,75 +601,10 @@ export function Item({
     setShowParentSuggestions(false);
   };
 
-  const handleContentSubmit = () => {
-    if (isProcessingDeletion) {
-      return;
+  const handleContentSubmit = (processedContent: ProcessedContent) => {
+    if (onEditingChange) {
+      onEditingChange(false);
     }
-    
-    const { cleanContent: contentWithoutParent, parent } = parseContentAndParent(editedContent);
-    const { cleanContent: contentWithoutDeps, dependencies } = parseContentAndDependencies(contentWithoutParent);
-    
-    const contentLines = contentWithoutDeps.split('\n');
-    const title = contentLines[0].trim();
-    const description = contentLines.slice(1).filter(line => !line.trim().startsWith('- ')).join('\n').trim();
-    
-    if (title === '') {
-      toast.error('Task title cannot be empty');
-      contentInputRef.current?.focus();
-      return;
-    }
-    
-    if (parent && parent.id !== item.parent_id) {
-      updateItem({ parent_id: parent.id });
-    } else if (!parent && item.parent_id) {
-      updateItem({ parent_id: null });
-    }
-    
-    const currentSubtasks = item.entries({ parent_id: item.id })
-      .map(task => ({ id: task.id, title: task.title }));
-    
-    const subtasksToProcess: { id?: string, title: string, position: number }[] = [];
-    
-    contentLines.forEach((line) => {
-      const existingMatch = line.trim().match(/^-\s*\[(.*?)\]\(#(.*?)\)$/);
-      const newMatch = line.trim().match(/^-\s+(.+)$/);
-      
-      if (existingMatch) {
-        subtasksToProcess.push({
-          id: existingMatch[2],
-          title: existingMatch[1].trim(),
-          position: subtasksToProcess.length
-        });
-      } else if (newMatch) {
-        subtasksToProcess.push({
-          title: newMatch[1].trim(),
-          position: subtasksToProcess.length
-        });
-      }
-    });
-    
-    const subtasksToDelete = currentSubtasks.filter(
-      current => !subtasksToProcess.some(toProcess => toProcess.id === current.id)
-    );
-    
-    if (subtasksToDelete.length > 0) {
-      setIsProcessingDeletion(true);
-      
-      setPendingOperations({
-        title,
-        description: description || undefined,
-        dependencies,
-        subtasksToProcess,
-        newSubtasks: [],
-        existingSubtaskIds: []
-      });
-      
-      setDeletedSubtasksQueue(subtasksToDelete);
-      setDeletingSubtaskId(subtasksToDelete[0].id);
-    }
-    
-    performContentUpdate(title, description, dependencies);
-    processSubtasks(subtasksToProcess);
   };
   
   const processSubtasks = (subtasks: { id?: string, title: string, position: number }[]) => {
@@ -783,6 +743,20 @@ export function Item({
   };
 
   useEffect(() => {
+    if (searchQuery) {
+      const normalizedQuery = searchQuery.toLowerCase().trim();
+      const normalizedTitle = item.title.toLowerCase();
+      const normalizedDescription = item.description?.toLowerCase() || '';
+      setIsSearchMatch(
+        normalizedTitle.includes(normalizedQuery) ||
+        normalizedDescription.includes(normalizedQuery)
+      );
+    } else {
+      setIsSearchMatch(false);
+    }
+  }, [searchQuery, item.title, item.description]);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
         isEditing &&
@@ -790,7 +764,12 @@ export function Item({
         !contentInputRef.current.contains(event.target as Node) &&
         (!depSuggestionsRef.current || !depSuggestionsRef.current.contains(event.target as Node))
       ) {
-        handleContentSubmit();
+        handleContentSubmit({ 
+          title: editedContent.split('\n')[0],
+          description: editedContent.split('\n').slice(1).join('\n'),
+          dependencies: [],
+          subtasks: []
+        });
       }
     };
 
@@ -896,69 +875,22 @@ export function Item({
                 )}
                 {isEditing ? (
                   <div className="flex-grow relative" onClick={(e) => e.stopPropagation()}>
-                    <textarea
-                      ref={contentInputRef}
-                      value={editedContent}
-                      onChange={handleTextareaChange}
-                      onKeyDown={handleTextareaKeyDown}
-                      className="w-full px-1 py-0.5 text-base font-medium border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none min-h-[60px] bg-white text-gray-800"
-                      rows={Math.max(2, editedContent.split('\n').length)}
-                      placeholder="Type title here (first line)&#10;Add details here (following lines). Type @ to mention dependencies."
-                      onInput={handleTextareaResize}
-                      onClick={(e) => e.stopPropagation()}
+                    <ItemEditor
+                      item={item}
+                      onSave={() => {
+                        setIsEditing(false);
+                        if (onEditingChange) {
+                          onEditingChange(false);
+                        }
+                      }}
+                      onCancel={() => {
+                        setEditedContent(item.description 
+                          ? `${item.title}\n${item.description}` 
+                          : item.title);
+                        setIsEditing(false);
+                        toast.success('Edit cancelled');
+                      }}
                     />
-                    <div className="absolute inset-x-0 top-[24px] border-t border-gray-200 opacity-50 pointer-events-none" />
-                    <div className="text-xs text-gray-500 mt-1">
-                      First line: title, list: subtasks, rest: description. Type @ to add dependencies. Supports markdown and links.
-                      <br />
-                      Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> to save, <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Esc</kbd> to cancel.
-                    </div>
-                    
-                    {showDepSuggestions && typeof document !== 'undefined' && createPortal(
-                      <div 
-                        ref={depSuggestionsRef}
-                        style={{
-                          position: 'fixed',
-                          top: `${depSuggestionPos.top}px`,
-                          left: `${depSuggestionPos.left}px`,
-                          zIndex: 9999
-                        }}
-                        className="bg-white rounded-md shadow-xl border border-gray-300 max-h-64 overflow-y-auto w-72"
-                      >
-                        <div className="p-2">
-                          <div className="text-xs font-semibold text-gray-600 px-2 py-1 mb-1 border-b border-gray-200">
-                            Dependencies {filterText ? `matching "${filterText}"` : ''}
-                          </div>
-                          
-                          {filteredTasks.length > 0 ? (
-                            <div className="max-h-52 overflow-y-auto">
-                              {filteredTasks.map((task, index) => (
-                                <div
-                                  key={task.id}
-                                  onClick={() => insertDependency(task)}
-                                  className={`
-                                    px-3 py-2 text-sm cursor-pointer flex items-center
-                                    ${index === selectedSuggestionIndex ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'}
-                                  `}
-                                >
-                                  <span className="mr-1.5 font-bold text-indigo-500">@</span>
-                                  <span className="truncate">{task.title}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="px-3 py-2 text-sm text-gray-500">
-                              {filterText ? 'No matching tasks found' : 'Type to search for tasks'}
-                            </div>
-                          )}
-                          
-                          <div className="text-xs text-gray-500 mt-1 px-2 pt-1 border-t border-gray-100">
-                            Use ↑↓ to navigate, Enter to select
-                          </div>
-                        </div>
-                      </div>,
-                      document.body
-                    )}
                   </div>
                 ) : (
                   <div 
@@ -984,7 +916,7 @@ export function Item({
                             ${item.isBlocked ? 'bg-red-500' : 'bg-green-500'}
                           `}
                         >
-                          {item.isBlocked ? item.blockedBy.length + (item.dateDependency ? 1 : 0) : item.blockedBy.length}
+                          {item.isBlocked ? item.blockedBy.length + (item.blockedBy.some(dep => dep.type === 'Date') ? 1 : 0) : item.blockedBy.length}
                         </div>
                       </button>
                       <span className="font-medium cursor-text hover:text-gray-600">
@@ -1069,19 +1001,21 @@ export function Item({
                 </svg>
               </button>
 
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onFocus(item);
-                }}
-                className="p-1 text-gray-500 hover:text-gray-700"
-                title="Focus on this task"
-              >
-                <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M5 8a1 1 0 011-1h1V6a1 1 0 012 0v1h1a1 1 0 110 2H9v1a1 1 0 11-2 0V9H6a1 1 0 01-1-1z" />
-                  <path fillRule="evenodd" d="M2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8zm6-4a4 4 0 100 8 4 4 0 000-8z" clipRule="evenodd" />
-                </svg>
-              </button>
+              {onFocus && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFocus(item);
+                  }}
+                  className="p-1 text-gray-500 hover:text-gray-700"
+                  title="Focus on this task"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M5 8a1 1 0 011-1h1V6a1 1 0 012 0v1h1a1 1 0 110 2H9v1a1 1 0 11-2 0V9H6a1 1 0 01-1-1z" />
+                    <path fillRule="evenodd" d="M2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8zm6-4a4 4 0 100 8 4 4 0 000-8z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              )}
 
               <button
                 onClick={(e) => {
@@ -1369,12 +1303,17 @@ export function Item({
             setDeletedSubtasksQueue([]);
             setDeletingSubtaskId(null);
             setIsProcessingDeletion(false);
-            handleContentSubmit();
+            handleContentSubmit({ 
+              title: editedContent.split('\n')[0],
+              description: editedContent.split('\n').slice(1).join('\n'),
+              dependencies: [],
+              subtasks: []
+            });
           }}
           onConfirm={(deleteChildren) => {
             handleDeleteSubtaskConfirmed(deleteChildren);
           }}
-          hasChildren={!!item.entries({ parent_id: deletingSubtaskId }).length > 0}
+          hasChildren={item.entries({ parent_id: deletingSubtaskId }).length > 0}
           itemTitle={deletedSubtasksQueue.find(s => s.id === deletingSubtaskId)?.title || 'Unknown Subtask'}
           childCount={item.entries({ parent_id: deletingSubtaskId }).length}
         />
