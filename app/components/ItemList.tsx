@@ -4,13 +4,11 @@ import { useDrop } from 'react-dnd'
 import { type Database } from '../../src/lib/supabase/client'
 import { Breadcrumb } from './Breadcrumb'
 import { useDragDropManager } from 'react-dnd'
-import { Item as DbItem, Dependencies } from '@/app/components/types'
+import { DateDependencyRow, Item as DbItem, Dependencies, TaskDependencyRow } from './types'
 import { Item as UiItem } from '@/app/types'
 import { db, type DB } from '@/src/app/Entry'
 import { supabase } from '@/src/lib/supabase/client'
 
-type TaskDependencyRow = Database['public']['Tables']['task_dependencies']['Row']
-type DateDependencyRow = Database['public']['Tables']['date_dependencies']['Row']
 
 const isTaskDependency = (dep: Dependencies[number]): dep is { type: 'Task', data: TaskDependencyRow } => {
   return dep.type === 'Task';

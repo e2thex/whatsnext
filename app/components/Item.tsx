@@ -1,21 +1,13 @@
-import { type ReactNode, useCallback, useState, useRef, useEffect, useMemo } from 'react'
+import { useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useDrag } from 'react-dnd'
-import { type Database } from '@/src/lib/supabase/client'
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog'
 import { DependencySelectionDialog } from './DependencySelectionDialog'
 import { toast } from 'react-hot-toast'
 import { renderMarkdown } from '@/src/utils/markdown'
 import typeIcons, { typeColors, typeRingColors } from './typeIcons'
 import { ItemTypes } from './ItemTypes'
-import type { Item, Dependencies, SubItem, ItemType } from './types'
-
-type TaskDependencyRow = Database['public']['Tables']['task_dependencies']['Row']
-type DateDependencyRow = Database['public']['Tables']['date_dependencies']['Row']
-
-const isItemType = (type: ItemType | null | undefined, value: ItemType): boolean => {
-  return type === value
-}
+import type { Dependency, Item, ItemType } from './types'
 
 interface ItemProps {
   item: Item
@@ -30,24 +22,6 @@ interface DragItem {
   type: typeof ItemTypes.ITEM
   parentId: string | null
   position: number
-}
-
-const sortByTitle = (a: Item, b: Item): number => a.title.localeCompare(b.title)
-
-const getDependencyTitle = (dep: Dependencies[number]): string => {
-  if (dep.type === 'Task') {
-    const taskDep = dep.data as Database['public']['Tables']['task_dependencies']['Row']
-    return taskDep.blocking_task_id // We'll need to look up the title from the items table
-  } else {
-    const dateDep = dep.data as Database['public']['Tables']['date_dependencies']['Row']
-    return new Date(dateDep.unblock_at).toLocaleDateString()
-  }
-}
-
-const sortSubItems = (a: Item, b: Item): number => a.title.localeCompare(b.title)
-
-const handleAddChild = async (childItem: Item) => {
-  // ... existing code ...
 }
 
 export function Item({ 
@@ -67,9 +41,7 @@ export function Item({
   const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false)
   const [isDependencySelectionOpen, setIsDependencySelectionOpen] = useState(false)
   const [isDateDependencyOpen, setIsDateDependencyOpen] = useState(false)
-  const [selectedDate, setSelectedDate] = useState<Date | null>(
-    item.dateDependency ? new Date(item.dateDependency.unblock_at) : null
-  )
+  const [selectedDate, setSelectedDate] = useState<Date | null>()
   
   const [showDepSuggestions, setShowDepSuggestions] = useState(false)
   const [depSuggestionPos, setDepSuggestionPos] = useState({ top: 0, left: 0 })
@@ -131,7 +103,7 @@ export function Item({
     if (item.blockedBy.length === 0) return '';
     
     const depLines = item.blockedBy.map(dep => {
-      const blockingTask = item.entries({ id: dep.id })[0];
+      const blockingTask = item.entries({ id: dep.data.id })[0];
       if (!blockingTask) return '';
       return `@[${blockingTask.title}](#${blockingTask.id})`;
     }).filter(Boolean);
@@ -681,7 +653,7 @@ export function Item({
       if (!subtask.id) {
         item.create({title: subtask.title, parent_id: item.id, position: subtask.position});
       } else {
-        const existingSubtask = item.entry(subtask.id);
+        const existingSubtask = item.entry({id: subtask.id});
         if (existingSubtask) {
           existingSubtask.update({title: subtask.title, position: subtask.position});
         }
@@ -704,12 +676,12 @@ export function Item({
     if (dependencies) {
       dependencies.forEach(dep => {
         const existingDep = item.blockedBy.find(
-          blockDep => blockDep.id === dep.id
+          blockDep => blockDep.data.id === dep.id
         );
         
         if (!existingDep) {
           const newDependency: Dependency = {
-            type: 'task',
+            type: 'Task',
             data: {
               id: dep.id,
               blocking_task_id: dep.id,
@@ -729,7 +701,7 @@ export function Item({
 
   const handleDeleteSubtaskConfirmed = (deleteChildren: boolean) => {
     if (deletingSubtaskId) {
-      const subtask = item.entry(deletingSubtaskId);
+      const subtask = item.entry({id: deletingSubtaskId});
       if (subtask) {
         subtask.delete(deleteChildren);
       }
@@ -1133,28 +1105,19 @@ export function Item({
               ${isCollapsed ? 'h-0 mt-0 opacity-0' : 'opacity-100'}
             `}
           >
-            {item.subItems.map((child, index) => (
-              <Item
+            {item.subItems.map((child) => {
+              const childItem = item.entry({id: child.id});
+              if (!childItem) return null;
+              return <Item
                 key={child.id}
-                item={child}
+                item={childItem}
                 onAddChild={onAddChild}
                 onToggleComplete={onToggleComplete}
-                onFocus={onFocus}
-                onAddDependency={onAddDependency}
-                onRemoveDependency={onRemoveDependency}
-                onAddDateDependency={onAddDateDependency}
-                onRemoveDateDependency={onRemoveDateDependency}
-                onCreateSubtask={onCreateSubtask}
-                onUpdateSubtask={onUpdateSubtask}
-                onEditingChange={onEditingChange}
-                siblingCount={siblingCount}
-                isSearchMatch={isSearchMatch}
                 breadcrumbs={[...breadcrumbs, item]}
-                onNavigate={onNavigate}
                 searchQuery={searchQuery}
                 viewMode={viewMode}
               />
-            ))}
+          })}
           </div>
         )}
       </div>
@@ -1231,10 +1194,10 @@ export function Item({
               <div className="mb-2">
                 <h3 className="text-xs font-medium text-gray-500 mb-1">Blocked by tasks:</h3>
                 {item.blockedBy.map(dep => {
-                  const blockingTask = item.entries({ id: dep.id })[0];
+                  const blockingTask = item.entries({ id: dep.data.id })[0];
                   const isCompleted = blockingTask?.completed
                   return (
-                    <div key={dep.id} className="flex items-center justify-between text-sm text-gray-700 py-1">
+                    <div key={dep.data.id} className="flex items-center justify-between text-sm text-gray-700 py-1">
                       <span className={`truncate flex-1 mr-2 flex items-center gap-1 ${isCompleted ? 'line-through text-gray-400' : ''}`}>
                         {isCompleted && (
                           <svg className="w-4 h-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
@@ -1245,7 +1208,7 @@ export function Item({
                       </span>
                       <button
                         onClick={() => {
-                          const updatedDependencies = item.blockedBy.filter((d: Dependency) => d.id !== dep.id);
+                          const updatedDependencies = item.blockedBy.filter((d: Dependency) => d.data.id !== dep.data.id);
                           item.update({ blockedBy: updatedDependencies });
                         }}
                         className="text-red-600 hover:text-red-700 whitespace-nowrap"
@@ -1262,10 +1225,10 @@ export function Item({
               <div className="mb-2">
                 <h3 className="text-xs font-medium text-gray-500 mb-1">Blocking tasks:</h3>
                 {item.blockedBy.map(dep => {
-                  const blockedTask = item.entries({ id: dep.id })[0];
+                  const blockedTask = item.entries({ id: dep.data.id })[0];
                   const isCompleted = blockedTask?.completed
                   return (
-                    <div key={dep.id} className="flex items-center justify-between text-sm text-gray-700 py-1">
+                    <div key={dep.data.id} className="flex items-center justify-between text-sm text-gray-700 py-1">
                       <span className={`truncate flex-1 mr-2 flex items-center gap-1 ${isCompleted ? 'line-through text-gray-400' : ''}`}>
                         {isCompleted && (
                           <svg className="w-4 h-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
@@ -1276,7 +1239,7 @@ export function Item({
                       </span>
                       <button
                         onClick={() => {
-                          const updatedDependencies = item.blockedBy.filter((d: Dependency) => d.id !== dep.id);
+                          const updatedDependencies = item.blockedBy.filter((d: Dependency) => d.data.id !== dep.data.id);
                           item.update({ blockedBy: updatedDependencies });
                         }}
                         className="text-red-600 hover:text-red-700 whitespace-nowrap"
@@ -1289,7 +1252,7 @@ export function Item({
               </div>
             )}
 
-            {item.blockedBy.length === 0 && item.dateDependency && (
+            {item.blockedBy.length === 0 && (
               <p className="text-sm text-gray-500 py-1">No dependencies</p>
             )}
 
@@ -1307,14 +1270,14 @@ export function Item({
 
             <div className="mt-2 pt-2 border-t border-gray-100">
               <h3 className="text-xs font-medium text-gray-500 mb-1">Date dependency:</h3>
-              {item.dateDependency ? (
+              {item.blockedBy.find(dep => dep.type === 'Date') ? (
                 <div className="flex items-center justify-between text-sm text-gray-700 py-1">
                   <span className="truncate flex-1 mr-2">
-                    Blocked until {new Date(item.dateDependency.unblock_at).toLocaleDateString()}
+                    Blocked until {new Date(item.blockedBy.find(dep => dep.type === 'Date')?.data.unblock_at||'').toLocaleDateString()}
                   </span>
                   <button
                     onClick={() => {
-                      item.update({ dateDependency: null });
+                      item.update({ blockedBy: item.blockedBy.filter(dep => dep.type !=='Date') });
                     }}
                     className="text-red-600 hover:text-red-700 whitespace-nowrap"
                   >
@@ -1364,7 +1327,7 @@ export function Item({
               <button
                 onClick={() => {
                   if (selectedDate) {
-                    item.update({ dateDependency: { unblock_at: selectedDate.toISOString() } });
+                    item.update({ blockedBy: [...item.blockedBy, { type: 'Date', data: { unblock_at: selectedDate.toISOString(), task_id: item.id, user_id: item.user_id || '', created_at: new Date().toISOString(), id: crypto.randomUUID() } }] });
                     setIsDateDependencyOpen(false)
                     setSelectedDate(null)
                   }
@@ -1384,7 +1347,7 @@ export function Item({
         onClose={() => setIsDependencySelectionOpen(false)}
         onSelect={(taskId) => {
           const newDependency: Dependency = {
-            type: 'task',
+            type: 'Task',
             data: {
               id: taskId,
               blocking_task_id: taskId,
