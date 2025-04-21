@@ -189,13 +189,15 @@ export function ItemList({
 
   const onAddChild = useCallback(async (item: DbItem) => {
     const newItem = await db.create({
-      title: '',
-      description: '',
-      type: 'task',
-      parent_id: item.core.id,
-      position: itemsByParent.get(item.core.id)?.length || 0,
-      completed: false,
-      user_id: db.userId
+      core: {
+        title: '',
+        description: '',
+        type: 'task',
+        parent_id: item.core.id,
+        position: itemsByParent.get(item.core.id)?.length || 0,
+        completed: false,
+        user_id: db.userId
+      }
     })
     
     if (newItem) {

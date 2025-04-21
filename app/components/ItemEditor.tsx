@@ -127,8 +127,8 @@ export const ItemEditor = ({ item, onCancel, onSave }: ItemEditorProps) => {
     const updates = {
       core: {
         title: processedContent.title,
-        description: processedContent.description || null,
-        parent_id: processedContent.parentId || null
+        description: processedContent.description || '',
+        // parent_id: processedContent.parentId || null
 
       },
       subtasks: processedContent.subtasks.map(subtask => ({
@@ -145,6 +145,7 @@ export const ItemEditor = ({ item, onCancel, onSave }: ItemEditorProps) => {
         }
       }))
     }
+    console.log('E', item.entries({}))
     // Make a single update call with the complete updated item
     item.update(updates);
     // Process subtasks

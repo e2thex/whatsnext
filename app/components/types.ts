@@ -26,6 +26,8 @@ export type DB = {
   update: (item: Item, updates: PartialItem) => Promise<Item|null>,
   setEntries: (entries: Item[]) => void,
   setEntriesTreeMap: (entriesTreeMap: Map<string, Item[]>) => void,
+  setUser: (id: string) => void,
+  populateEntries: (userId: string) => Promise<void>,
   userId: string,
 }
 

@@ -4,13 +4,13 @@ import { whatChanged } from "../utils/objectUtils"
 import { useState, useCallback, useEffect } from 'react'
 // Assuming the Item component is missing or incorrectly imported, we'll remove it for now.
 
-const populateEntries = async (db:DB) => {
+const populateEntries = async (db:DB, userId: string) => {
     try {
         console.log('Starting to populate entries...');
         const { data: items, error: itemsError } = await supabase
             .from('items')
             .select('*')
-            .eq('user_id', db.userId)
+            .eq('user_id', userId)
         
         console.log('Fetched items:', items?.length || 0);
         
@@ -22,7 +22,7 @@ const populateEntries = async (db:DB) => {
         const { data: dependenciesData, error: dependenciesError } = await supabase
             .from('task_dependencies')
             .select('*')
-            .eq('user_id', db.userId)
+            .eq('user_id', userId)
 
         console.log('Fetched task dependencies:', dependenciesData?.length || 0);
 
@@ -34,7 +34,7 @@ const populateEntries = async (db:DB) => {
         const { data: dateDependenciesData, error: dateDependenciesError } = await supabase
             .from('date_dependencies')
             .select('*')
-            .eq('user_id', db.userId)
+            .eq('user_id', userId)
 
         console.log('Fetched date dependencies:', dateDependenciesData?.length || 0);
 
@@ -73,7 +73,8 @@ const populateEntries = async (db:DB) => {
     }
 }
 
-export const useDb = (userId: string | null): DB | null => {
+export const useDb = (): DB => {
+  const [userId, setUserId] = useState<string | null>(null);
   const [entries, setEntries] = useState<Item[]>([]);
   const [entriesTreeMap, setEntriesTreeMap] = useState<Map<string, Item[]>>(new Map());
 
@@ -87,22 +88,22 @@ export const useDb = (userId: string | null): DB | null => {
   }, []);
 
   // Initialize the database by populating entries
-  useEffect(() => {
-    if (!userId) {
-      console.log('No userId provided, skipping populateEntries');
-      setEntries([]);
-      setEntriesTreeMap(new Map());
-      return;
-    }
+  //useEffect(() => {
+    // if (!userId) {
+    //   console.log('No userId provided, skipping populateEntries');
+    //   //setEntries([]);
+    //   //setEntriesTreeMap(new Map());
+    //   return;
+    // }
     
-    populateEntries(dbInstance as unknown as DB).catch(error => {
-      console.error('Failed to initialize database:', error);
-    });
-  }, [userId]);
+    //populateEntries(dbInstance as unknown as DB).catch(error => {
+    //  console.error('Failed to initialize database:', error);
+    //});
+  //}, [userId]);
 
-  if (!userId) {
-    return null;
-  }
+  // if (!userId) {
+  //   return null;
+  // }
 
   const dbInstance = {
     create: async (partial: Partial<Item>) => {
@@ -183,6 +184,15 @@ export const useDb = (userId: string | null): DB | null => {
         console.error('Error deleting item:', error);
       }
     },
+    setUser: (id: string) => {
+      setUserId(id);
+    },
+    populateEntries: async (userId: string) => {
+      setUserId(userId)
+      populateEntries(dbInstance as unknown as DB, userId).catch(error => {
+        console.error('Failed to initialize database:', error);
+      });
+    },
     update: async (item: Item, updates: PartialItem) => {
       console.log('Starting update operation');
       console.log('Current entries state:', {
@@ -203,6 +213,7 @@ export const useDb = (userId: string | null): DB | null => {
 
         const dbItemChanges = {...item.core, ...updates.core};
         console.log('DB changes to apply Core:', dbItemChanges);
+        console.log('DB changes to apply Core for', {id: item.core.id,userId});
          
         if (Object.keys(dbItemChanges).length > 0) {
           const { error: updateError } = await supabase

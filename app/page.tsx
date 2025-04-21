@@ -22,7 +22,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null)
   
-  const dbInstance = useDb(userId)
+  const dbInstance = useDb()
 
   useEffect(() => {
     const fetchUserAndData = async () => {
@@ -53,6 +53,14 @@ export default function Home() {
     }
   }, [])
 
+  useEffect(() => {
+    if (userId) {
+      dbInstance.populateEntries(userId).catch(error => {
+        console.error('Failed to populate entries:', error);
+      });
+    }
+  }, [userId]);
+
   const handleAddChild = async (parentId: string | null) => {
     if (!dbInstance) return
 
@@ -69,10 +77,10 @@ export default function Home() {
     }
   }
 
-  if (isLoading || !userId || !dbInstance) {
+  if (isLoading || !userId) {
     return <div>Loading...</div>
   }
-  console.log(dbInstance.entries({}));
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="flex flex-col h-screen">
