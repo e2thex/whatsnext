@@ -17,9 +17,9 @@ interface ItemEditorProps {
 }
 
 export const ItemEditor = ({ item, onCancel, onSave }: ItemEditorProps) => {
-  const [editedContent, setEditedContent] = useState(item.description 
-    ? `${item.title}\n${item.description}` 
-    : item.title);
+  const [editedContent, setEditedContent] = useState(item.core.description 
+    ? `${item.core.title}\n${item.core.description}` 
+    : item.core.title);
   const [showDepSuggestions, setShowDepSuggestions] = useState(false);
   const [depSuggestionPos, setDepSuggestionPos] = useState({ top: 0, left: 0 });
   const [filterText, setFilterText] = useState('');
@@ -34,12 +34,12 @@ export const ItemEditor = ({ item, onCancel, onSave }: ItemEditorProps) => {
   const filteredTasks = useMemo(() => {
     return item.entries({ completed: false })
       .filter(task => 
-        task.id !== item.id && 
-        task.title.toLowerCase().includes(filterText.toLowerCase())
+        task.core.id !== item.core.id && 
+        task.core.title.toLowerCase().includes(filterText.toLowerCase())
       )
-      .sort((a, b) => a.title.localeCompare(b.title))
+      .sort((a, b) => a.core.title.localeCompare(b.core.title))
       .slice(0, 10);
-  }, [item.id, filterText]);
+  }, [item.core.id, filterText]);
 
   const parseContentAndDependencies = (content: string) => {
     const depRegex = /@\[(.*?)\]\(#(.*?)\)/g;
@@ -49,7 +49,8 @@ export const ItemEditor = ({ item, onCancel, onSave }: ItemEditorProps) => {
       title: match[1],
       id: match[2]
     }));
-    
+    const parentRegex = /^\[(.*?)\]\(#(.*?)\)/g; 
+    const parentId = Array.from(content.matchAll(parentRegex)).map(match => match[2])[0];
     const cleanContent = content.replace(depRegex, '').trim();
     const contentLines = cleanContent.split('\n');
     
@@ -84,6 +85,7 @@ export const ItemEditor = ({ item, onCancel, onSave }: ItemEditorProps) => {
     return {
       title,
       description: description || undefined,
+      parentId,
       dependencies,
       subtasks
     };
@@ -117,88 +119,38 @@ export const ItemEditor = ({ item, onCancel, onSave }: ItemEditorProps) => {
     }
 
     const processedContent = parseContentAndDependencies(editedContent);
-    
     if (processedContent.title === '') {
       toast.error('Task title cannot be empty');
       contentInputRef.current?.focus();
       return;
     }
+    const updates = {
+      core: {
+        title: processedContent.title,
+        description: processedContent.description || null,
+        parent_id: processedContent.parentId || null
 
-    const currentSubtasks = item.entries({ parent_id: item.id })
-      .map(task => ({ id: task.id, title: task.title }));
-    
-    const subtasksToDelete = currentSubtasks.filter(
-      current => !processedContent.subtasks.some(toProcess => toProcess.id === current.id)
-    );
-    
-    if (subtasksToDelete.length > 0) {
-      setIsProcessingDeletion(true);
-      setDeletedSubtasksQueue(subtasksToDelete);
-      setDeletingSubtaskId(subtasksToDelete[0].id);
-      return;
-    }
-
-    // Update the item
-    item.update({ 
-      title: processedContent.title,
-      description: processedContent.description
-    });
-
-    // Update dependencies
-    const currentDependencies = item.blockedBy.map(dep => dep.data.id);
-    const newDependencies = processedContent.dependencies.map(dep => dep.id);
-    
-    // Remove old dependencies
-    currentDependencies.forEach(depId => {
-      if (!newDependencies.includes(depId)) {
-        item.update({ 
-          blockedBy: item.blockedBy.filter(d => d.data.id !== depId)
-        });
-      }
-    });
-    
-    // Add new dependencies
-    processedContent.dependencies.forEach(dep => {
-      if (!currentDependencies.includes(dep.id)) {
-        const newDependency = {
-          type: "Date" as const,
-          data: {
-            id: dep.id,
-            blocking_task_id: dep.id,
-            blocked_task_id: item.id,
-            created_at: new Date().toISOString(),
-            user_id: item.user_id || '',
-            task_id: item.id,
-            unblock_at: new Date().toISOString()
-          }
-        };
-        item.update({ blockedBy: [...item.blockedBy, newDependency] });
-      }
-    });
-
-    // Process subtasks
-    processedContent.subtasks.forEach(subtask => {
-      if (!subtask.id) {
-        // Create new subtask
-        item.create({
-          title: subtask.title,
-          parent_id: item.id,
-          position: subtask.position
-        });
-      } else {
-        // Update existing subtask
-        const existingSubtask = item.entry({id: subtask.id});
-        if (existingSubtask) {
-          existingSubtask.update({
-            title: subtask.title,
-            position: subtask.position
-          });
+      },
+      subtasks: processedContent.subtasks.map(subtask => ({
+        id: subtask.id || undefined,
+        title: subtask.title,
+        position: subtask.position
+      })),
+      blockedBy: processedContent.dependencies.map(dep => ({
+        type: "Task" as const,
+        data: {
+          id: dep.id,
+          blocking_task_id: dep.id,
+          blocked_task_id: item.core.id,
         }
-      }
-    });
+      }))
+    }
+    // Make a single update call with the complete updated item
+    item.update(updates);
+    // Process subtasks
 
-    onSave?.();
-    onCancel();
+    // onSave?.();
+    // onCancel();
   };
 
   useEffect(() => {
@@ -253,7 +205,7 @@ export const ItemEditor = ({ item, onCancel, onSave }: ItemEditorProps) => {
     const lastAtPos = textBeforeCursor.lastIndexOf('@');
     
     if (lastAtPos >= 0) {
-      const depText = `@[${task.title}](#${task.id})`;
+      const depText = `@[${task.core.title}](#${task.core.id})`;
       
       const newContent = 
         editedContent.substring(0, lastAtPos) + 
@@ -376,6 +328,7 @@ export const ItemEditor = ({ item, onCancel, onSave }: ItemEditorProps) => {
         value={editedContent}
         onChange={handleTextareaChange}
         onKeyDown={handleTextareaKeyDown}
+        onBlur={handleContentSubmit}
         className="w-full px-1 py-0.5 text-base font-medium border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none min-h-[60px] bg-white text-gray-800"
         rows={Math.max(2, editedContent.split('\n').length)}
         placeholder="Type title here (first line)&#10;Add details here (following lines). Type @ to mention dependencies."
@@ -409,7 +362,7 @@ export const ItemEditor = ({ item, onCancel, onSave }: ItemEditorProps) => {
               <div className="max-h-52 overflow-y-auto">
                 {filteredTasks.map((task, index) => (
                   <div
-                    key={task.id}
+                    key={task.core.id}
                     onClick={() => insertDependency(task)}
                     className={`
                       px-3 py-2 text-sm cursor-pointer flex items-center
@@ -417,7 +370,7 @@ export const ItemEditor = ({ item, onCancel, onSave }: ItemEditorProps) => {
                     `}
                   >
                     <span className="mr-1.5 font-bold text-indigo-500">@</span>
-                    <span className="truncate">{task.title}</span>
+                    <span className="truncate">{task.core.title}</span>
                   </div>
                 ))}
               </div>
