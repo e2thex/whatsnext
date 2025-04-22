@@ -46,13 +46,10 @@ As a user, I want to be able to toggle to a list view, which shows only bottom l
 
 ### List View Algorithm
 - Developed filtering logic to identify bottom-level tasks (those without children)
-- Created a `getBottomLevelTasks` function that efficiently filters the task set
-- When focus is active, implemented a `getBottomLevelTasksUnderParent` function to find only bottom-level descendants of the focused item
 - Ensures that the focused item itself is shown if it has no children
 
 ### Breadcrumb Integration
 - Each task in list view shows its full ancestry as breadcrumbs
-- Breadcrumb implementation uses the `getItemAncestry` function to build the path
 - Each breadcrumb is clickable and navigates to focus on that ancestor
 - Breadcrumbs are clipped if too long, focusing on the most relevant parts of the path
 

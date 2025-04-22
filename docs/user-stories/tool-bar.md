@@ -35,6 +35,8 @@ As a user, I want to have quick access to features that affect the display of it
   - Search functionality with keyboard shortcuts (/ to focus, Esc to clear)
   - An "Add Task" button
 - The component is responsive, with appropriate adaptations for mobile devices
+  - At the mobile view it is in a fitler menu
 - Keyboard accessibility has been implemented for all features
 
 ## Related Components
+- @src/app/components/Toolbar.tsx
