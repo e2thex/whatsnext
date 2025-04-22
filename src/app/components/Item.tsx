@@ -2,7 +2,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Database } from '@/lib/supabase/client'
-import { updateTask, getBlockingTasks } from '../services/tasks'
+import { updateTask, getBlockingTasks, getTask } from '../services/tasks'
+import { useMemo } from 'react'
 
 type Item = Database['public']['Tables']['items']['Row']
 
@@ -16,6 +17,29 @@ export const Item = ({ item }: ItemProps) => {
   const { data: blockingTasks = [] } = useQuery({
     queryKey: ['blockingTasks', item.id],
     queryFn: () => getBlockingTasks(item.id),
+  })
+
+  // Get parent hierarchy
+  const { data: parentHierarchy = [] } = useQuery({
+    queryKey: ['parentHierarchy', item.id],
+    queryFn: async () => {
+      const hierarchy: Item[] = []
+      const visitedIds = new Set<string>()
+      let currentItem = item
+
+      while (currentItem.parent_id && !visitedIds.has(currentItem.parent_id)) {
+        visitedIds.add(currentItem.parent_id)
+        const parent = await getTask(currentItem.parent_id)
+        if (parent) {
+          hierarchy.unshift(parent)
+          currentItem = parent
+        } else {
+          break
+        }
+      }
+
+      return hierarchy
+    },
   })
 
   const updateTaskMutation = useMutation({
@@ -39,7 +63,17 @@ export const Item = ({ item }: ItemProps) => {
   const isBlocked = blockingTasks.length > 0
 
   return (
-    <li className="py-4">
+    <div className="py-4">
+      {parentHierarchy.length > 0 && (
+        <div className="mb-2 flex items-center text-sm text-gray-500">
+          {parentHierarchy.map((parent, index) => (
+            <span key={parent.id} className="flex items-center">
+              {index > 0 && <span className="mx-1">/</span>}
+              <span>{parent.title}</span>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex items-center">
         <input
           type="checkbox"
@@ -60,6 +94,6 @@ export const Item = ({ item }: ItemProps) => {
           </span>
         )}
       </div>
-    </li>
+    </div>
   )
 } 

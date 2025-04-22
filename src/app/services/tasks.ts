@@ -4,6 +4,21 @@ import { Database } from '@/lib/supabase/client'
 type Item = Database['public']['Tables']['items']['Row']
 type TaskDependency = Database['public']['Tables']['task_dependencies']['Row']
 
+export const getTask = async (id: string): Promise<Item | null> => {
+  const supabase = createClientComponentClient<Database>()
+  const { data, error } = await supabase
+    .from('items')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (error) {
+    throw error
+  }
+
+  return data
+}
+
 export const getTasks = async (): Promise<Item[]> => {
   const supabase = createClientComponentClient<Database>()
   const { data, error } = await supabase
@@ -39,6 +54,7 @@ export const updateTask = async (id: string, updates: Partial<Item>): Promise<It
 }
 
 export const getBlockedTasks = async (taskId: string): Promise<string[]> => {
+  const supabase = createClientComponentClient<Database>()
   const { data, error } = await supabase
     .from('task_dependencies')
     .select('blocked_task_id')

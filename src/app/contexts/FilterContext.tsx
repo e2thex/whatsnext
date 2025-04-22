@@ -1,11 +1,12 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, ReactNode, useEffect } from 'react'
 
 type FilterState = {
   viewMode: 'list' | 'tree'
   completion: 'all' | 'todo' | 'done'
   search: string
+  focusedItemId: string | null
 }
 
 interface FilterContextType {
@@ -20,7 +21,19 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     viewMode: 'list',
     completion: 'all',
     search: '',
+    focusedItemId: null,
   })
+
+  useEffect(() => {
+    const savedViewMode = localStorage.getItem('viewMode')
+    if (savedViewMode === 'list' || savedViewMode === 'tree') {
+      setFilter(prev => ({ ...prev, viewMode: savedViewMode }))
+    }
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem('viewMode', filter.viewMode)
+  }, [filter.viewMode])
 
   const updateFilter = (updates: Partial<FilterState>) => {
     setFilter((prev) => ({ ...prev, ...updates }))
