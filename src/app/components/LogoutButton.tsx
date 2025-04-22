@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/src/lib/supabase/client'
+import { supabase } from '@/lib/supabase/client'
 
 interface LogoutButtonProps {
   className?: string

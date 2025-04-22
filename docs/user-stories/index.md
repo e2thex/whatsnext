@@ -56,7 +56,7 @@ This epic focuses on user authentication and security.
 
 | User Story | Status | Dependencies | Description |
 |------------|--------|--------------|-------------|
-| [Authentication](authentication.md) | Not Completed | None | Provides user authentication and authorization. |
+| [Authentication](authentication.md) | Completed | None | Provides user authentication and authorization. |
 
 ## Implementation Architecture
 
