@@ -8,14 +8,14 @@ This epic focuses on features that help users organize, view, and interact with 
 
 | User Story | Status | Dependencies | Description |
 |------------|--------|--------------|-------------|
-| [Tool Bar](tool-bar.md) | ✓ Completed | None | Provides a centralized UI for controlling task display, including layout, filtering, and search. |
-| [Completion Status Filtering](task-filtering.md) | ✓ Completed | [Tool Bar](tool-bar.md) | Allows users to filter tasks based on completion status (All/Todo/Done). |
-| [Blocking Status Filtering](blocking-status-filtering.md) | ✓ Completed | [Tool Bar](tool-bar.md) | Allows users to filter tasks based on blocking status (Any/Actionable/Blocked). |
-| [Layout Switching](layout-switching.md) | ✓ Completed | [Tool Bar](tool-bar.md) | Enables users to switch between Tree and List views of tasks. |
-| [Task Search](task-search.md) | ✓ Completed | [Tool Bar](tool-bar.md) | Provides functionality to search for tasks by keywords. |
-| [Type Filtering](type-filtering.md) | ✓ Completed | [Tool Bar](tool-bar.md) | Allows users to filter tasks based on their type. |
-| [List View](list-view.md) | ✓ Completed | [Layout Switching](layout-switching.md) | Provides a flat list view of tasks with sorting and filtering capabilities. |
-| [Drag & Drop Reordering](drag-drop-reordering.md) | ✓ Completed | None | Enables users to reorder tasks through intuitive drag and drop interactions. |
+| [Tool Bar](tool-bar.md) | Not Completed | None | Provides a centralized UI for controlling task display, including layout, filtering, and search. |
+| [Completion Status Filtering](task-filtering.md) | Not Completed | [Tool Bar](tool-bar.md) | Allows users to filter tasks based on completion status (All/Todo/Done). |
+| [Blocking Status Filtering](blocking-status-filtering.md) | Not Completed | [Tool Bar](tool-bar.md) | Allows users to filter tasks based on blocking status (Any/Actionable/Blocked). |
+| [Layout Switching](layout-switching.md) | Not Completed | [Tool Bar](tool-bar.md) | Enables users to switch between Tree and List views of tasks. |
+| [Task Search](task-search.md) | Not Completed | [Tool Bar](tool-bar.md) | Provides functionality to search for tasks by keywords. |
+| [Type Filtering](type-filtering.md) | Not Completed | [Tool Bar](tool-bar.md) | Allows users to filter tasks based on their type. |
+| [List View](list-view.md) | Not Completed | [Layout Switching](layout-switching.md) | Provides a flat list view of tasks with sorting and filtering capabilities. |
+| [Drag & Drop Reordering](drag-drop-reordering.md) | Not Completed | None | Enables users to reorder tasks through intuitive drag and drop interactions. |
 
 ## Task Management Epic
 
@@ -23,12 +23,12 @@ This epic focuses on core task management features.
 
 | User Story | Status | Dependencies | Description |
 |------------|--------|--------------|-------------|
-| [Task Dependencies](task-dependencies.md) | ✓ Completed | None | Allows users to create and manage dependencies between tasks. |
-| [Task Archiving](task-archiving.md) | ✓ Completed | None | Enables users to archive completed tasks while preserving history. |
-| [Task Due Dates](task-due-dates.md) | ✓ Completed | None | Allows users to set and manage due dates for tasks. |
-| [Task Progress](task-progress.md) | ✓ Completed | None | Provides visual indicators of task completion progress. |
-| [Task Questions](task-questions.md) | ✓ Completed | None | Enables users to add questions and answers to tasks. |
-| [Date Dependencies](date-dependencies.md) | ✓ Completed | [Task Dependencies](task-dependencies.md) | Allows users to create dependencies based on dates. |
+| [Task Dependencies](task-dependencies.md) | Not Completed | None | Allows users to create and manage dependencies between tasks. |
+| [Task Archiving](task-archiving.md) | Not Completed | None | Enables users to archive completed tasks while preserving history. |
+| [Task Due Dates](task-due-dates.md) | Not Completed | None | Allows users to set and manage due dates for tasks. |
+| [Task Progress](task-progress.md) | Not Completed | None | Provides visual indicators of task completion progress. |
+| [Task Questions](task-questions.md) | Not Completed | None | Enables users to add questions and answers to tasks. |
+| [Date Dependencies](date-dependencies.md) | Not Completed | [Task Dependencies](task-dependencies.md) | Allows users to create dependencies based on dates. |
 
 ## Task Editing Epic
 
@@ -36,10 +36,10 @@ This epic focuses on features related to task creation and modification.
 
 | User Story | Status | Dependencies | Description |
 |------------|--------|--------------|-------------|
-| [Item Edit](item-edit.md) | ✓ Completed | None | Provides comprehensive task editing capabilities. |
-| [Manual Type Override](manual-type-override.md) | ✓ Completed | None | Allows users to manually override task types. |
-| [Automatic Task Typing](automatic-task-typing.md) | ✓ Completed | None | Automatically determines task types based on content. |
-| [Focus on Item](focus-on-item.md) | ✓ Completed | None | Enables users to focus on and edit specific tasks. |
+| [Item Edit](item-edit.md) | Not Completed | None | Provides comprehensive task editing capabilities. |
+| [Manual Type Override](manual-type-override.md) | Not Completed | None | Allows users to manually override task types. |
+| [Automatic Task Typing](automatic-task-typing.md) | Not Completed | None | Automatically determines task types based on content. |
+| [Focus on Item](focus-on-item.md) | Not Completed | None | Enables users to focus on and edit specific tasks. |
 
 ## Task Structure Epic
 
@@ -47,8 +47,8 @@ This epic focuses on hierarchical organization of tasks.
 
 | User Story | Status | Dependencies | Description |
 |------------|--------|--------------|-------------|
-| [Hierarchical Tasks](hierarchical-tasks.md) | ✓ Completed | None | Supports creating and managing task hierarchies. |
-| [Task Management](task-management.md) | ✓ Completed | None | Provides core task management functionality. |
+| [Hierarchical Tasks](hierarchical-tasks.md) | Not Completed | None | Supports creating and managing task hierarchies. |
+| [Task Management](task-management.md) | Not Completed | None | Provides core task management functionality. |
 
 ## Security Epic
 
@@ -56,7 +56,7 @@ This epic focuses on user authentication and security.
 
 | User Story | Status | Dependencies | Description |
 |------------|--------|--------------|-------------|
-| [Authentication](authentication.md) | ✓ Completed | None | Provides user authentication and authorization. |
+| [Authentication](authentication.md) | Not Completed | None | Provides user authentication and authorization. |
 
 ## Implementation Architecture
 

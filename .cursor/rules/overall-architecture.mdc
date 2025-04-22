@@ -1,0 +1,23 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- The backend is using supabase
+- user management will use supabase
+- the frontend is using react
+    - prefer functional to object components
+    - pefer small components and functions 
+    - Components should have minimal interfaces 
+    - be dry
+    - Use encapsulation
+- All code should use strict TypeScript
+    - avoid use of any for types 
+
+- styling should be done with tailwindcss
+- use TanStack Query to access data and manage state
+- all work should have a user story in docs/user-stories 
+- all functions should have passing unit tests

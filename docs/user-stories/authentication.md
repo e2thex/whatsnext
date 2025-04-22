@@ -8,6 +8,8 @@ As a user, I want to be able to login to use the application so that I can acces
 - Users can only see their own tasks
 - New users can create accounts
 - Users remain logged in between sessions
+- Users can use thier github login to login to our app
+- Users can use thier google login to login to our app
 
 ## Implementation Details
 - Implemented using Supabase Authentication
