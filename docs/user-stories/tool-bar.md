@@ -38,6 +38,3 @@ As a user, I want to have quick access to features that affect the display of it
 - Keyboard accessibility has been implemented for all features
 
 ## Related Components
-
-- `app/components/Toolbar.tsx` - Main implementation
-- `app/page.tsx` - Integration with the main application 
