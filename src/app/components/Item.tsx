@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Database } from '@/lib/supabase/client'
 import { updateTask, getBlockingTasks, getTask } from '../services/tasks'
 import { useMemo } from 'react'
+import { useFilter } from '../contexts/FilterContext'
 
 type Item = Database['public']['Tables']['items']['Row']
 
@@ -13,6 +14,7 @@ interface ItemProps {
 
 export const Item = ({ item }: ItemProps) => {
   const queryClient = useQueryClient()
+  const { updateFilter } = useFilter()
 
   const { data: blockingTasks = [] } = useQuery({
     queryKey: ['blockingTasks', item.id],
@@ -60,6 +62,10 @@ export const Item = ({ item }: ItemProps) => {
     })
   }
 
+  const handleParentClick = (parentId: string) => {
+    updateFilter({ focusedItemId: parentId })
+  }
+
   const isBlocked = blockingTasks.length > 0
 
   return (
@@ -69,7 +75,12 @@ export const Item = ({ item }: ItemProps) => {
           {parentHierarchy.map((parent, index) => (
             <span key={parent.id} className="flex items-center">
               {index > 0 && <span className="mx-1">/</span>}
-              <span>{parent.title}</span>
+              <button
+                onClick={() => handleParentClick(parent.id)}
+                className="hover:text-indigo-600"
+              >
+                {parent.title}
+              </button>
             </span>
           ))}
         </div>

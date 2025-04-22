@@ -1,8 +1,11 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Database } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase/client'
 
 type Item = Database['public']['Tables']['items']['Row']
 type TaskDependency = Database['public']['Tables']['task_dependencies']['Row']
+type Task = Database['public']['Tables']['items']['Row']
+type TaskInsert = Database['public']['Tables']['items']['Insert']
 
 export const getTask = async (id: string): Promise<Item | null> => {
   const supabase = createClientComponentClient<Database>()
@@ -79,4 +82,15 @@ export const getBlockingTasks = async (taskId: string): Promise<string[]> => {
   }
 
   return (data || []).map(dep => dep.blocking_task_id)
+}
+
+export const createTask = async (task: TaskInsert): Promise<Task> => {
+  const { data, error } = await supabase
+    .from('items')
+    .insert(task)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 } 
