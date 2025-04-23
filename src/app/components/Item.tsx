@@ -5,6 +5,7 @@ import { Database } from '@/lib/supabase/client'
 import { updateTask, getBlockingTasks, getTask } from '../services/tasks'
 import { useMemo } from 'react'
 import { useFilter } from '../contexts/FilterContext'
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 
 type Item = Database['public']['Tables']['items']['Row']
 
@@ -14,7 +15,7 @@ interface ItemProps {
 
 export const Item = ({ item }: ItemProps) => {
   const queryClient = useQueryClient()
-  const { updateFilter } = useFilter()
+  const { filter, updateFilter } = useFilter()
 
   const { data: blockingTasks = [] } = useQuery({
     queryKey: ['blockingTasks', item.id],
@@ -66,7 +67,12 @@ export const Item = ({ item }: ItemProps) => {
     updateFilter({ focusedItemId: parentId })
   }
 
+  const handleFocus = () => {
+    updateFilter({ focusedItemId: item.id })
+  }
+
   const isBlocked = blockingTasks.length > 0
+  const isFocused = filter.focusedItemId === item.id
 
   return (
     <div className="py-4">
@@ -104,6 +110,15 @@ export const Item = ({ item }: ItemProps) => {
             Blocked
           </span>
         )}
+        <button
+          onClick={handleFocus}
+          className={`ml-2 p-1 rounded-full hover:bg-gray-100 ${
+            isFocused ? 'text-indigo-600' : 'text-gray-400'
+          }`}
+          title="Focus on this item"
+        >
+          <MagnifyingGlassIcon className="h-4 w-4" />
+        </button>
       </div>
     </div>
   )

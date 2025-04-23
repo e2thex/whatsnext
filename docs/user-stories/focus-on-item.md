@@ -38,31 +38,18 @@ As a user, I want to focus on a single item and its children by clicking on some
 
 ### Focus Button
 - Implemented a magnifying glass icon button in each item's action bar
-- When clicked, it calls the `onFocus` function with the item's ID
 
 ### Breadcrumb Navigation
 - Created a `Breadcrumb` component that displays the ancestry chain of the focused item
-- Uses `getItemAncestry` function to retrieve the full path to the focused item
-- Each item in the breadcrumb is clickable and calls `onFocus` with that item's ID when clicked
-- Breadcrumbs are only displayed when an item is focused and not during search
+- Each item in the breadcrumb is clickable and calls  changes the focus to that item 
 
 ### Tree View Implementation
-- Modified `renderTreeView` function to start rendering from the focused item instead of the root
-- When an item is focused, `renderTreeView` is called with the focused item ID as the parent
-- This ensures only the focused item and its descendants are rendered
+- ensures only the focused item and its descendants are rendered
 
 ### List View Implementation
-- Implemented `getBottomLevelTasksUnderParent` function that finds all bottom-level tasks under a given parent
 - When focus is active, list view shows only bottom-level tasks under the focused item
-- Uses a breadth-first search algorithm to find all bottom-level descendants efficiently
 
 ### Search Integration
 - Search functionality still operates while in focus mode
 - Search results are still properly filtered to show only matching items and their lineage
 - Bottom-level task filtering is maintained during search in list view
-
-### State Management
-- Focus state is maintained in the `focusedItemId` state variable
-- Clicking the focus button for an item sets this state
-- Clicking on a breadcrumb item updates this state
-- Setting focus to `null` returns to viewing all items 

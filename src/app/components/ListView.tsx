@@ -6,6 +6,7 @@ import { Item } from './Item'
 import { useFilter } from '../contexts/FilterContext'
 import { createTask } from '../services/tasks'
 import { useQueryClient } from '@tanstack/react-query'
+import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 
 type Task = Database['public']['Tables']['items']['Row']
 
@@ -18,12 +19,49 @@ export const ListView = ({ tasks }: ListViewProps) => {
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const queryClient = useQueryClient()
 
+  // Get focused item and its hierarchy
+  const focusedItem = useMemo(() => {
+    if (!filter.focusedItemId) return null
+    return tasks.find(task => task.id === filter.focusedItemId)
+  }, [filter.focusedItemId, tasks])
+
+  const focusedItemHierarchy = useMemo(() => {
+    if (!focusedItem) return []
+    const hierarchy: Task[] = []
+    let currentItem = focusedItem
+    while (currentItem.parent_id) {
+      const parent = tasks.find(t => t.id === currentItem.parent_id)
+      if (parent) {
+        hierarchy.unshift(parent)
+        currentItem = parent
+      } else {
+        break
+      }
+    }
+    return hierarchy
+  }, [focusedItem, tasks])
+
   // Memoize bottom-level tasks calculation
   const bottomLevelTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      return !tasks.some((t) => t.parent_id === task.id)
-    })
-  }, [tasks])
+    if (filter.focusedItemId) {
+      // Get all descendants of the focused item
+      const getDescendants = (itemId: string): Task[] => {
+        const descendants: Task[] = []
+        const queue = [itemId]
+        while (queue.length > 0) {
+          const currentId = queue.shift()!
+          const children = tasks.filter(t => t.parent_id === currentId)
+          descendants.push(...children)
+          queue.push(...children.map(c => c.id))
+        }
+        return descendants
+      }
+
+      const descendants = getDescendants(filter.focusedItemId)
+      return descendants.filter(task => !tasks.some(t => t.parent_id === task.id))
+    }
+    return tasks.filter((task) => !tasks.some((t) => t.parent_id === task.id))
+  }, [tasks, filter.focusedItemId])
 
   // Memoize filtered and sorted tasks
   const filteredTasks = useMemo(() => {
@@ -93,6 +131,32 @@ export const ListView = ({ tasks }: ListViewProps) => {
 
   return (
     <div className="w-full">
+      {focusedItem && (
+        <div className="mb-4 flex items-center">
+          <button
+            onClick={() => updateFilter({ focusedItemId: null })}
+            className="mr-2 p-1 rounded-full hover:bg-gray-100 text-gray-500"
+            title="Exit focus mode"
+          >
+            <ArrowLeftIcon className="h-5 w-5" />
+          </button>
+          <div className="flex items-center text-sm text-gray-500">
+            {focusedItemHierarchy.map((item, index) => (
+              <span key={item.id} className="flex items-center">
+                {index > 0 && <span className="mx-1">/</span>}
+                <button
+                  onClick={() => updateFilter({ focusedItemId: item.id })}
+                  className="hover:text-indigo-600"
+                >
+                  {item.title}
+                </button>
+              </span>
+            ))}
+            <span className="mx-1">/</span>
+            <span className="font-medium text-gray-900">{focusedItem.title}</span>
+          </div>
+        </div>
+      )}
       <form onSubmit={handleCreateTask} className="mb-4">
         <div className="flex gap-2">
           <input
