@@ -68,45 +68,29 @@ export const ListView = ({ tasks }: ListViewProps) => {
       return true
     })
 
-    // Sort tasks based on their hierarchy
-    return filtered.sort((a, b) => {
-      // Get the full path for each task
-      const getPath = (task: Task): string[] => {
-        const path: string[] = []
-        let currentTask = task
-        while (currentTask.parent_id) {
-          const parent = tasks.find(t => t.id === currentTask.parent_id)
-          if (parent) {
-            path.unshift(parent.id)
-            currentTask = parent
-          } else {
-            break
-          }
-        }
-        return path
+    const getAncestors = (task: Task): Task[] => {
+      const buildAncestors = (t: Task, acc: Task[] = []): Task[] => {
+        const parent = tasks.find(p => p.id === t.parent_id)
+        return parent ? buildAncestors(parent, [t, ...acc]) : [t, ...acc]
       }
+      return buildAncestors(task)
+    }
 
-      const pathA = getPath(a)
-      const pathB = getPath(b)
+    const compareTasks = (a: Task, b: Task): number => {
+      const pathA = getAncestors(a)
+      const pathB = getAncestors(b)
+      console.log(pathA, 'pathA')
+      console.log(pathB, 'pathB')
+      const compare = pathA.keys().reduce((result, i) => {
+        if (result !== 0) return result
+        const localResult = pathA[i].position - pathB[i].position
+        return localResult
+      }, 0)
 
-      // Compare paths element by element
-      for (let i = 0; i < Math.min(pathA.length, pathB.length); i++) {
-        if (pathA[i] !== pathB[i]) {
-          // If the paths diverge, sort by the position in the parent's children
-          const parentId = pathA[i - 1] || null
-          if (parentId) {
-            const siblings = tasks.filter(t => t.parent_id === parentId)
-            const indexA = siblings.findIndex(t => t.id === a.id)
-            const indexB = siblings.findIndex(t => t.id === b.id)
-            return indexA - indexB
-          }
-          return 0
-        }
-      }
+      return compare
+    }
 
-      // If one path is a prefix of the other, the shorter path comes first
-      return pathA.length - pathB.length
-    })
+    return filtered.sort(compareTasks)
   }, [bottomLevelTasks, filter, tasks])
 
   return (
