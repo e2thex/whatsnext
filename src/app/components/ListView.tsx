@@ -1,11 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Database } from '@/lib/supabase/client'
 import { Item } from './Item'
 import { useFilter } from '../contexts/FilterContext'
-import { createTask } from '../services/tasks'
-import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 
 type Task = Database['public']['Tables']['items']['Row']
@@ -16,8 +14,6 @@ interface ListViewProps {
 
 export const ListView = ({ tasks }: ListViewProps) => {
   const { filter, updateFilter } = useFilter()
-  const [newTaskTitle, setNewTaskTitle] = useState('')
-  const queryClient = useQueryClient()
 
   // Get focused item and its hierarchy
   const focusedItem = useMemo(() => {
@@ -113,22 +109,6 @@ export const ListView = ({ tasks }: ListViewProps) => {
     })
   }, [bottomLevelTasks, filter, tasks])
 
-  const handleCreateTask = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newTaskTitle.trim()) return
-
-    try {
-      await createTask({
-        title: newTaskTitle.trim(),
-        parent_id: filter.focusedItemId,
-      })
-      setNewTaskTitle('')
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-    } catch (error) {
-      console.error('Failed to create task:', error)
-    }
-  }
-
   return (
     <div className="w-full">
       {focusedItem && (
@@ -157,23 +137,6 @@ export const ListView = ({ tasks }: ListViewProps) => {
           </div>
         </div>
       )}
-      <form onSubmit={handleCreateTask} className="mb-4">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newTaskTitle}
-            onChange={(e) => setNewTaskTitle(e.target.value)}
-            placeholder="Add a new task..."
-            className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          />
-          <button
-            type="submit"
-            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-          >
-            Add Task
-          </button>
-        </div>
-      </form>
 
       {filteredTasks.length === 0 ? (
         <div className="text-center py-8 text-gray-500">No tasks found</div>
