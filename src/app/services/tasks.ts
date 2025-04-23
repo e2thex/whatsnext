@@ -85,9 +85,19 @@ export const getBlockingTasks = async (taskId: string): Promise<string[]> => {
 }
 
 export const createTask = async (task: TaskInsert): Promise<Task> => {
+  const supabase = createClientComponentClient<Database>()
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) {
+    throw new Error('User must be authenticated to create tasks')
+  }
+
   const { data, error } = await supabase
     .from('items')
-    .insert(task)
+    .insert({
+      ...task,
+      user_id: user.id
+    })
     .select()
     .single()
 

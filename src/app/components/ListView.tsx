@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { Database } from '@/lib/supabase/client'
-import { Item } from './Item'
+import { TaskItem } from './TaskItem'
 import { useFilter } from '../contexts/FilterContext'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 
@@ -144,7 +144,10 @@ export const ListView = ({ tasks }: ListViewProps) => {
         <ul className="divide-y divide-gray-200">
           {filteredTasks.map((task) => (
             <li key={task.id} className="py-4">
-              <Item item={task} />
+              <TaskItem 
+                task={task}
+                showParentHierarchy={true}
+              />
             </li>
           ))}
         </ul>

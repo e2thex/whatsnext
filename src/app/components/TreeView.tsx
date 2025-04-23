@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { Database } from '@/lib/supabase/client'
 import { useFilter } from '../contexts/FilterContext'
-import { ArrowLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon } from '@heroicons/react/24/outline'
+import { TaskItem } from './TaskItem'
 
 type Task = Database['public']['Tables']['items']['Row']
 
@@ -47,7 +48,6 @@ export const TreeView = ({ tasks }: TreeViewProps) => {
   const renderNode = (task: Task, level: number = 0) => {
     const children = tasks.filter((t) => t.parent_id === task.id)
     const isExpanded = expandedNodes.has(task.id)
-    const isFocused = filter.focusedItemId === task.id
 
     return (
       <div key={task.id} className="pl-4">
@@ -67,43 +67,17 @@ export const TreeView = ({ tasks }: TreeViewProps) => {
             {children.length === 0 && <div className="w-4" />}
           </div>
           <div className="flex-1">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                checked={task.completed}
-                readOnly
-                className="h-4 w-4 text-blue-600 rounded border-gray-300"
-              />
-              <span className={`ml-2 ${task.completed ? 'line-through text-gray-500' : ''}`}>
-                {task.title}
-              </span>
-              <button
-                onClick={() => updateFilter({ focusedItemId: task.id })}
-                className={`ml-2 p-1 rounded-full hover:bg-gray-100 ${
-                  isFocused ? 'text-indigo-600' : 'text-gray-400'
-                }`}
-                title="Focus on this item"
-              >
-                <MagnifyingGlassIcon className="h-4 w-4" />
-              </button>
-            </div>
+            <TaskItem 
+              task={task}
+              showParentHierarchy={false}
+              className="flex-1"
+            />
           </div>
         </div>
         {isExpanded && children.map((child) => renderNode(child, level + 1))}
       </div>
     )
   }
-
-  const rootTasks = filter.focusedItemId
-    ? tasks.filter(task => task.id === filter.focusedItemId)
-    : tasks.filter(task => !task.parent_id)
-
-  const filteredRootTasks = rootTasks.filter((task) => {
-    if (filter.completion === 'todo' && task.completed) return false
-    if (filter.completion === 'done' && !task.completed) return false
-    if (filter.search && !task.title.toLowerCase().includes(filter.search.toLowerCase())) return false
-    return true
-  })
 
   return (
     <div className="w-full">
@@ -133,13 +107,10 @@ export const TreeView = ({ tasks }: TreeViewProps) => {
           </div>
         </div>
       )}
-      {filteredRootTasks.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">No tasks found</div>
-      ) : (
-        <div className="divide-y divide-gray-200">
-          {filteredRootTasks.map((task) => renderNode(task))}
-        </div>
-      )}
+
+      {tasks
+        .filter((task) => !task.parent_id)
+        .map((task) => renderNode(task))}
     </div>
   )
 } 
