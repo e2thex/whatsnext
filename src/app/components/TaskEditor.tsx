@@ -3,12 +3,13 @@
 import { useState, useRef } from 'react'
 import { Database } from '@/lib/supabase/client'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { updateTask } from '../services/tasks'
+import { updateTask, createTask } from '../services/tasks'
 
 type Task = Database['public']['Tables']['items']['Row']
+type TaskInput = Omit<Task, 'id' | 'created_at' | 'completed_at' | 'user_id'>
 
 interface TaskEditorProps {
-  task: Task
+  task: Partial<Task> & TaskInput
   onCancel: () => void
 }
 
@@ -28,16 +29,36 @@ export const TaskEditor = ({ task, onCancel }: TaskEditorProps) => {
     },
   })
 
+  const createTaskMutation = useMutation({
+    mutationFn: createTask,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      onCancel()
+    },
+  })
+
   const handleSave = () => {
     const [title, ...descriptionLines] = editedContent.split('\n')
     if (title.trim()) {
-      updateTaskMutation.mutate({ 
-        id: task.id, 
-        updates: {
+      if (task.id) {
+        updateTaskMutation.mutate({ 
+          id: task.id, 
+          updates: {
+            title: title.trim(),
+            description: descriptionLines.join('\n').trim() || null
+          }
+        })
+      } else {
+        createTaskMutation.mutate({
           title: title.trim(),
-          description: descriptionLines.join('\n').trim() || null
-        }
-      })
+          description: descriptionLines.join('\n').trim() || null,
+          completed: false,
+          parent_id: task.parent_id || null,
+          position: 0,
+          type: 'task',
+          manual_type: false
+        })
+      }
     }
   }
 

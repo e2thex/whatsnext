@@ -6,6 +6,7 @@ import { ListView } from './ListView'
 import { getTasks } from '../services/tasks'
 import { Database } from '@/lib/supabase/client'
 import { useFilter } from '../contexts/FilterContext'
+import { TaskCreator } from './TaskCreator'
 
 type Task = Database['public']['Tables']['items']['Row']
 
@@ -29,8 +30,14 @@ export const ItemList = () => {
     )
   }
 
-  if (filter.viewMode === 'tree') {
-    return <TreeView tasks={tasks} />
-  }
-  return <ListView tasks={tasks} />
+  return (
+    <div className="w-full">
+      {filter.viewMode === 'tree' ? (
+        <TreeView tasks={tasks} />
+      ) : (
+        <ListView tasks={tasks} />
+      )}
+      <TaskCreator />
+    </div>
+  )
 } 
