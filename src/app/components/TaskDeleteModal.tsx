@@ -34,10 +34,10 @@ export const TaskDeleteModal = ({ task, onClose, tasks }: TaskDeleteModalProps) 
     }
   })
 
-  const handleDelete = () => {
-    if (!deleteMode) return
+  const handleDelete = (mode: DeleteMode) => {
+    if (!mode) return
     setIsDeleting(true)
-    deleteTaskMutation.mutate({ id: task.id, mode: deleteMode })
+    deleteTaskMutation.mutate({ id: task.id, mode })
   }
 
   // Find all child tasks
@@ -69,31 +69,7 @@ export const TaskDeleteModal = ({ task, onClose, tasks }: TaskDeleteModalProps) 
           
           {hasChildren && (
             <div className="mb-4">
-              <h3 className="text-lg font-medium mb-2">This task has child tasks. What would you like to do with them?</h3>
-              <div className="space-y-2">
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="deleteMode"
-                    value="delete-all"
-                    checked={deleteMode === 'delete-all'}
-                    onChange={() => setDeleteMode('delete-all')}
-                    className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
-                  />
-                  <span>Delete all child tasks</span>
-                </label>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="deleteMode"
-                    value="move-children"
-                    checked={deleteMode === 'move-children'}
-                    onChange={() => setDeleteMode('move-children')}
-                    className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
-                  />
-                  <span>Move child tasks to the same level as this task</span>
-                </label>
-              </div>
+              <h3 className="text-lg font-medium mb-2">This task has child tasks. How would you like to proceed?</h3>
             </div>
           )}
           
@@ -114,23 +90,42 @@ export const TaskDeleteModal = ({ task, onClose, tasks }: TaskDeleteModalProps) 
               ))}
             </ul>
           </div>
-        </div>
 
-        <div className="flex justify-end space-x-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            disabled={isDeleting}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleDelete}
-            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isDeleting || (hasChildren && !deleteMode)}
-          >
-            {isDeleting ? 'Deleting...' : 'Delete'}
-          </button>
+          <div className="flex justify-end space-x-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              disabled={isDeleting}
+            >
+              Cancel
+            </button>
+            {hasChildren ? (
+              <>
+                <button
+                  onClick={() => handleDelete('delete-all')}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete children'}
+                </button>
+                <button
+                  onClick={() => handleDelete('move-children')}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? 'Moving...' : 'Delete and move children up'}
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => handleDelete('delete-all')}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
