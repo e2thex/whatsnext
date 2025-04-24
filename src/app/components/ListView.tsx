@@ -1,12 +1,10 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Database } from '@/lib/supabase/client'
 import { TaskItem } from './TaskItem'
 import { useFilter } from '../contexts/FilterContext'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
-
-type Task = Database['public']['Tables']['items']['Row']
+import { Task } from '../services/tasks'
 
 interface ListViewProps {
   tasks: Task[]
@@ -64,6 +62,9 @@ export const ListView = ({ tasks }: ListViewProps) => {
     const filtered = bottomLevelTasks.filter((task) => {
       if (filter.completion === 'todo' && task.completed) return false
       if (filter.completion === 'done' && !task.completed) return false
+      if (filter.blocking === 'blocked' && !task.isBlocked) return false
+      if (filter.blocking === 'actionable' && task.isBlocked) return false
+      if (filter.blocking === 'blocking' && task.blocking.length === 0) return false
       if (filter.search && !task.title.toLowerCase().includes(filter.search.toLowerCase())) return false
       return true
     })

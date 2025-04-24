@@ -21,64 +21,6 @@ export type Task = BaseTask & {
   isBlocked: boolean
 }
 
-export const getTask = async (id: string): Promise<Task | null> => {
-  const supabase = createClientComponentClient<Database>()
-  const { data: task, error: taskError } = await supabase
-    .from('items')
-    .select('*')
-    .eq('id', id)
-    .single()
-
-  if (taskError) {
-    throw taskError
-  }
-
-  if (!task) {
-    return null
-  }
-
-  // Get tasks that are blocking this task
-  const { data: blockedBy, error: blockedByError } = await supabase
-    .from('task_dependencies')
-    .select(`
-      blocking_task_id,
-      blocking_task:blocking_task_id (
-        id,
-        title,
-        completed
-      )
-    `)
-    .eq('blocked_task_id', id)
-
-  if (blockedByError) {
-    throw blockedByError
-  }
-
-  // Get tasks that this task is blocking
-  const { data: blocking, error: blockingError } = await supabase
-    .from('task_dependencies')
-    .select(`
-      blocked_task_id,
-      blocked_task:blocked_task_id (
-        id,
-        title,
-        completed
-      )
-    `)
-    .eq('blocking_task_id', id)
-
-  if (blockingError) {
-    throw blockingError
-  }
-
-  return {
-    ...task,
-    blockedBy: (blockedBy || []).map(dep => dep.blocking_task),
-    blocking: (blocking || []).map(dep => dep.blocked_task),
-    isBlocked: (blockedBy || []).length > 0
-  }
-}
-
 type TaskDependencyWithDetails = {
   blocking_task_id: string
   blocked_task_id: string
@@ -94,22 +36,23 @@ type TaskDependencyWithDetails = {
   }
 }
 
-export const getTasks = async (): Promise<Task[]> => {
-  const supabase = createClientComponentClient<Database>()
-  const { data: tasks, error: tasksError } = await supabase
-    .from('items')
-    .select('*')
-    .order('position', { ascending: true })
+type TaskDependencyInfo = {
+  blockedBy: {
+    id: string
+    title: string
+    completed: boolean
+  }[]
+  blocking: {
+    id: string
+    title: string
+    completed: boolean
+  }[]
+  isBlocked: boolean
+}
 
-  if (tasksError) {
-    throw tasksError
-  }
-
-  if (!tasks) {
-    return []
-  }
-
-  // Get all task dependencies in one query
+// Helper function to fetch task dependencies and construct task objects
+async function fetchTaskDependencies(supabase: ReturnType<typeof createClientComponentClient<Database>>, taskIds: string[]): Promise<Map<string, TaskDependencyInfo>> {
+  // Get all task dependencies in one query, but only for non-completed blocking tasks
   const { data: dependencies, error: dependenciesError } = await supabase
     .from('task_dependencies')
     .select(`
@@ -126,25 +69,28 @@ export const getTasks = async (): Promise<Task[]> => {
         completed
       )
     `)
+    .in('blocking_task_id', taskIds)
+    .or(`blocked_task_id.in.(${taskIds.join(',')})`)
+    .eq('blocking_task.completed', false)
 
   if (dependenciesError) {
     throw dependenciesError
   }
 
   // Create a map of task IDs to their blocking relationships
-  const taskMap = new Map<string, Task>()
-  tasks.forEach(task => {
-    taskMap.set(task.id, {
-      ...task,
+  const taskMap = new Map<string, TaskDependencyInfo>()
+  taskIds.forEach(taskId => {
+    taskMap.set(taskId, {
       blockedBy: [],
       blocking: [],
       isBlocked: false
     })
   })
+  console.log(dependencies, 'dependencies')
 
   // Add blocking relationships to the tasks
   const typedDependencies = dependencies as unknown as TaskDependencyWithDetails[]
-  typedDependencies?.forEach((dep: TaskDependencyWithDetails) => {
+  typedDependencies?.filter(dep => dep.blocking_task !== null).forEach((dep: TaskDependencyWithDetails) => {
     const blockingTask = taskMap.get(dep.blocking_task_id)
     const blockedTask = taskMap.get(dep.blocked_task_id)
 
@@ -155,7 +101,50 @@ export const getTasks = async (): Promise<Task[]> => {
     }
   })
 
-  return Array.from(taskMap.values())
+  return taskMap
+}
+
+export const getTask = async (id: string): Promise<Task | null> => {
+  const tasks = await getTasksHelper([id])
+  return tasks[0] || null
+}
+
+export const getTasks = async (): Promise<Task[]> => {
+  const tasks = await getTasksHelper()
+  console.log(tasks, 'tasks')
+  return tasks
+}
+
+export const getTasksHelper = async (taskIds?: string[]): Promise<Task[]> => {
+  const supabase = createClientComponentClient<Database>()
+  let query = supabase
+    .from('items')
+    .select('*')
+    .order('position', { ascending: true })
+
+  // If taskIds are provided, filter by them
+  if (taskIds && taskIds.length > 0) {
+    query = query.in('id', taskIds)
+  }
+
+  const { data: tasks, error: tasksError } = await query
+
+  if (tasksError) {
+    throw tasksError
+  }
+
+  if (!tasks) {
+    return []
+  }
+
+  const idsToFetch = tasks.map(task => task.id)
+  const taskMap = await fetchTaskDependencies(supabase, idsToFetch)
+
+  // Merge the base task data with the dependency data
+  return tasks.map(task => ({
+    ...task,
+    ...(taskMap.get(task.id) || { blockedBy: [], blocking: [], isBlocked: false })
+  }))
 }
 
 export const updateTask = async (id: string, updates: Partial<Item>): Promise<Item> => {
@@ -178,33 +167,6 @@ export const updateTask = async (id: string, updates: Partial<Item>): Promise<It
   return data
 }
 
-export const getBlockedTasks = async (taskId: string): Promise<string[]> => {
-  const supabase = createClientComponentClient<Database>()
-  const { data, error } = await supabase
-    .from('task_dependencies')
-    .select('blocked_task_id')
-    .eq('blocking_task_id', taskId)
-
-  if (error) {
-    throw error
-  }
-
-  return data.map(dep => dep.blocked_task_id)
-}
-
-export const getBlockingTasks = async (taskId: string): Promise<string[]> => {
-  const supabase = createClientComponentClient<Database>()
-  const { data, error } = await supabase
-    .from('task_dependencies')
-    .select('blocking_task_id')
-    .eq('blocked_task_id', taskId)
-
-  if (error) {
-    throw error
-  }
-
-  return (data || []).map(dep => dep.blocking_task_id)
-}
 
 export const createTask = async (task: TaskInsert): Promise<Task> => {
   const supabase = createClientComponentClient<Database>()

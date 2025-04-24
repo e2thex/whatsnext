@@ -47,6 +47,14 @@ export const TreeView = ({ tasks }: TreeViewProps) => {
     const children = tasks.filter((t) => t.parent_id === task.id)
     const isExpanded = expandedNodes.has(task.id)
 
+    // Apply filters
+    if (filter.completion === 'todo' && task.completed) return null
+    if (filter.completion === 'done' && !task.completed) return null
+    if (filter.blocking === 'blocked' && !task.isBlocked) return null
+    if (filter.blocking === 'actionable' && task.isBlocked) return null
+    if (filter.blocking === 'blocking' && task.blocking.length === 0) return null
+    if (filter.search && !task.title.toLowerCase().includes(filter.search.toLowerCase())) return null
+
     return (
       <div key={task.id} className="pl-4">
         <div className="flex items-center py-2">

@@ -5,6 +5,7 @@ import { createContext, useContext, useState, ReactNode, useEffect } from 'react
 type FilterState = {
   viewMode: 'list' | 'tree'
   completion: 'all' | 'todo' | 'done'
+  blocking: 'all' | 'blocked' | 'actionable' | 'blocking'
   search: string
   focusedItemId: string | null
 }
@@ -20,6 +21,7 @@ export function FilterProvider({ children }: { children: ReactNode }) {
   const [filter, setFilter] = useState<FilterState>({
     viewMode: 'list',
     completion: 'all',
+    blocking: 'all',
     search: '',
     focusedItemId: null,
   })

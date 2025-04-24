@@ -1,15 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { Database } from '@/lib/supabase/client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createTask, getBlockingTasks, getTask, updateTask, getBlockedTasksWithDetails, getBlockingTasksWithDetails } from '../services/tasks'
+import { createTask, getTask, updateTask } from '../services/tasks'
 import { useFilter } from '../contexts/FilterContext'
 import { MagnifyingGlassIcon, PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { TaskEditor } from './TaskEditor'
 import { TaskBlockingButton } from './TaskBlockingModal'
-
-type Task = Database['public']['Tables']['items']['Row']
+import { Task } from '../services/tasks'
 
 interface TaskItemProps {
   task: Task
@@ -27,17 +25,6 @@ export const TaskItem = ({
   const [isAddingSubtask, setIsAddingSubtask] = useState(false)
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
   const [isEditing, setIsEditing] = useState(false)
-  const [showBlockingModal, setShowBlockingModal] = useState(false)
-
-  const { data: blockingTasks = [] } = useQuery({
-    queryKey: ['blockingTasks', task.id],
-    queryFn: () => getBlockingTasks(task.id),
-  })
-
-  const { data: blockedTasks = [] } = useQuery({
-    queryKey: ['blockedTasks', task.id],
-    queryFn: () => getBlockedTasksWithDetails(task.id),
-  })
 
   // Get parent hierarchy
   const { data: parentHierarchy = [] } = useQuery({
@@ -115,10 +102,9 @@ export const TaskItem = ({
   }
 
   const isFocused = filter.focusedItemId === task.id
-  const isBlocked = blockingTasks.length > 0
 
   return (
-    <div className={`${className} ${isBlocked ? 'opacity-50' : ''}`}>
+    <div className={`${className} ${task.isBlocked ? 'opacity-50' : ''}`}>
       {showParentHierarchy && parentHierarchy.length > 0 && (
         <div className="mb-2 flex items-center text-sm text-gray-500">
           {parentHierarchy.map((parent, index) => (

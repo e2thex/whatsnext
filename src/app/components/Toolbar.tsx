@@ -65,6 +65,49 @@ export const Toolbar = () => {
             Done
           </button>
         </div>
+
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => updateFilter({ blocking: 'all' })}
+            className={`px-3 py-1 rounded-md ${
+              filter.blocking === 'all'
+                ? 'bg-indigo-100 text-indigo-700'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Any
+          </button>
+          <button
+            onClick={() => updateFilter({ blocking: 'actionable' })}
+            className={`px-3 py-1 rounded-md ${
+              filter.blocking === 'actionable'
+                ? 'bg-green-100 text-green-700'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Actionable
+          </button>
+          <button
+            onClick={() => updateFilter({ blocking: 'blocked' })}
+            className={`px-3 py-1 rounded-md ${
+              filter.blocking === 'blocked'
+                ? 'bg-red-100 text-red-700'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Blocked
+          </button>
+          <button
+            onClick={() => updateFilter({ blocking: 'blocking' })}
+            className={`px-3 py-1 rounded-md ${
+              filter.blocking === 'blocking'
+                ? 'bg-yellow-100 text-yellow-700'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Blocking
+          </button>
+        </div>
       </div>
 
       <div className="relative">
