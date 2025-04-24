@@ -8,6 +8,10 @@ import { MagnifyingGlassIcon, PlusIcon, PencilIcon } from '@heroicons/react/24/o
 import { TaskEditor } from './TaskEditor'
 import { TaskBlockingButton } from './TaskBlockingModal'
 import { Task } from '../services/tasks'
+import typeIcons, { typeColors } from './typeIcons'
+import { determineTaskType } from '../utils/taskUtils'
+
+type TaskType = 'Task' | 'Mission' | 'Objective' | 'Ambition'
 
 interface TaskItemProps {
   task: Task
@@ -25,6 +29,7 @@ export const TaskItem = ({
   const [isAddingSubtask, setIsAddingSubtask] = useState(false)
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
   const [isEditing, setIsEditing] = useState(false)
+  const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false)
 
   // Get parent hierarchy
   const { data: parentHierarchy = [] } = useQuery({
@@ -103,6 +108,32 @@ export const TaskItem = ({
 
   const isFocused = filter.focusedItemId === task.id
 
+  const handleTypeChange = (newType: TaskType) => {
+    console.log('handleTypeChange', newType)
+    updateTaskMutation.mutate({
+      id: task.id,
+      updates: { 
+        type: newType,
+        manual_type: true
+      },
+    })
+    setIsTypeDropdownOpen(false)
+  }
+
+  const handleRevertToAutoType = () => {
+    updateTaskMutation.mutate({
+      id: task.id,
+      updates: { 
+        type: null,
+        manual_type: false
+      },
+    })
+    setIsTypeDropdownOpen(false)
+  }
+
+  const taskType = task.effectiveType
+  const taskTypeCapitalized = taskType.charAt(0).toUpperCase() + taskType.slice(1) as keyof typeof typeColors
+
   return (
     <div className={`${className} ${task.isBlocked ? 'opacity-50' : ''}`}>
       {showParentHierarchy && parentHierarchy.length > 0 && (
@@ -128,6 +159,39 @@ export const TaskItem = ({
           className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
         />
         <TaskBlockingButton task={task} className="ml-2" />
+        <div className="relative ml-2">
+          <button
+            onClick={() => setIsTypeDropdownOpen(!isTypeDropdownOpen)}
+            className={`p-1 rounded-full ${typeColors[taskTypeCapitalized]}`}
+            title={taskType}
+          >
+            {typeIcons[taskTypeCapitalized]}
+          </button>
+          {isTypeDropdownOpen && (
+            <div className="absolute left-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+              <div className="py-1">
+                {Object.entries(typeIcons).map(([type, icon]) => {
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => handleTypeChange(type as TaskType)}
+                      className={`w-full px-4 py-2 text-left flex items-center space-x-2 ${typeColors[type as keyof typeof typeColors]}`}
+                    >
+                      {icon}
+                      <span>{type}</span>
+                    </button>
+                  )
+                })}
+                <button
+                  onClick={handleRevertToAutoType}
+                  className="w-full px-4 py-2 text-left flex items-center space-x-2 text-gray-700 hover:bg-gray-100"
+                >
+                  <span>Auto-detect</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         {isEditing ? (
           <div className="ml-2 flex-1">
             <TaskEditor

@@ -16,6 +16,7 @@ import {
   FunnelIcon,
   ChevronDownIcon
 } from '@heroicons/react/24/outline'
+import typeIcons from './typeIcons'
 
 type FilterOption = {
   value: string
@@ -56,6 +57,17 @@ const filterGroups: FilterGroup[] = [
       { value: 'actionable', label: 'Actionable Tasks', icon: <CheckCircleIcon className="h-5 w-5" />, color: 'green' },
       { value: 'blocked', label: 'Blocked Tasks', icon: <NoSymbolIcon className="h-5 w-5" />, color: 'red' },
       { value: 'blocking', label: 'Blocking Tasks', icon: <ArrowUturnLeftIcon className="h-5 w-5" />, color: 'yellow' }
+    ]
+  },
+  {
+    title: 'Task Type',
+    type: 'type',
+    options: [
+      { value: 'all', label: 'All Types', icon: <CircleStackIcon className="h-5 w-5" /> },
+      { value: 'Task', label: 'Tasks', icon: typeIcons.Task, color: 'blue' },
+      { value: 'Mission', label: 'Missions', icon: typeIcons.Mission, color: 'green' },
+      { value: 'Objective', label: 'Objectives', icon: typeIcons.Objective, color: 'purple' },
+      { value: 'Ambition', label: 'Ambitions', icon: typeIcons.Ambition, color: 'red' }
     ]
   }
 ]

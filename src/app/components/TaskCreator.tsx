@@ -33,7 +33,7 @@ export const TaskCreator = () => {
             completed: false,
             parent_id: filter.focusedItemId || null,
             position: 0,
-            type: 'task',
+            type: 'Task',
             manual_type: false
           }}
           onCancel={() => setIsCreatingTask(false)}

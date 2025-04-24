@@ -73,15 +73,15 @@ export const ListView = ({ tasks }: ListViewProps) => {
     const compareTasks = (a: Task, b: Task): number => {
       const pathA = getAncestors(a)
       const pathB = getAncestors(b)
-      console.log(pathA, 'pathA')
-      console.log(pathB, 'pathB')
-      const compare = pathA.keys().reduce((result, i) => {
+      
+      // Compare each level of the hierarchy
+      for (let i = 0; i < Math.min(pathA.length, pathB.length); i++) {
+        const result = pathA[i].position - pathB[i].position
         if (result !== 0) return result
-        const localResult = pathA[i].position - pathB[i].position
-        return localResult
-      }, 0)
-
-      return compare
+      }
+      
+      // If all positions are equal up to the minimum length, the shorter path comes first
+      return pathA.length - pathB.length
     }
 
     return filtered.sort(compareTasks)

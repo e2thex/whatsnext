@@ -6,8 +6,18 @@ export type FilterState = {
   viewMode: 'list' | 'tree'
   completion: 'all' | 'todo' | 'done'
   blocking: 'all' | 'blocked' | 'actionable' | 'blocking'
+  type: 'all' | 'Task' | 'Mission' | 'Objective' | 'Ambition'
   search: string
   focusedItemId: string | null
+}
+
+const defaultFilterState: FilterState = {
+  viewMode: 'list',
+  completion: 'all',
+  blocking: 'all',
+  type: 'all',
+  search: '',
+  focusedItemId: null
 }
 
 interface FilterContextType {
@@ -22,6 +32,7 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     viewMode: 'list',
     completion: 'all',
     blocking: 'all',
+    type: 'all',
     search: '',
     focusedItemId: null,
   })

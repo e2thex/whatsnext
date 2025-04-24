@@ -55,7 +55,7 @@ export const TaskEditor = ({ task, onCancel }: TaskEditorProps) => {
           completed: false,
           parent_id: task.parent_id || null,
           position: 0,
-          type: 'task',
+          type: 'Task',
           manual_type: false
         })
       }

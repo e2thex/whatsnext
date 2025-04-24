@@ -1,6 +1,7 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Database } from '@/lib/supabase/client'
 import { supabase } from '@/lib/supabase/client'
+import { determineTaskType } from '../utils/taskUtils'
 
 type Item = Database['public']['Tables']['items']['Row']
 type TaskDependency = Database['public']['Tables']['task_dependencies']['Row']
@@ -19,6 +20,7 @@ export type Task = BaseTask & {
     completed: boolean
   }[]
   isBlocked: boolean
+  effectiveType: 'Task' | 'Mission' | 'Objective' | 'Ambition'
 }
 
 type TaskDependencyWithDetails = {
@@ -140,11 +142,18 @@ export const getTasksHelper = async (taskIds?: string[]): Promise<Task[]> => {
   const idsToFetch = tasks.map(task => task.id)
   const taskMap = await fetchTaskDependencies(supabase, idsToFetch)
 
-  // Merge the base task data with the dependency data
-  return tasks.map(task => ({
-    ...task,
-    ...(taskMap.get(task.id) || { blockedBy: [], blocking: [], isBlocked: false })
-  }))
+  // Merge the base task data with the dependency data and determine effective type
+  return tasks.map(task => {
+    const taskWithDeps = {
+      ...task,
+      ...(taskMap.get(task.id) || { blockedBy: [], blocking: [], isBlocked: false })
+    }
+    
+    return {
+      ...taskWithDeps,
+      effectiveType: determineTaskType(taskWithDeps, tasks)
+    }
+  })
 }
 
 export const updateTask = async (id: string, updates: Partial<Item>): Promise<Item> => {

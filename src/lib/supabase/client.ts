@@ -2,7 +2,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 export const supabase = createClientComponentClient()
 
-export type ItemType = 'task' | 'mission' | 'objective' | 'ambition'
+export type ItemType = 'Task' | 'Mission' | 'Objective' | 'Ambition'
 
 export type Json =
   | string
