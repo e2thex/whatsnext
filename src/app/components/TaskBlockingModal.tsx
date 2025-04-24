@@ -1,20 +1,21 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Database } from '@/lib/supabase/client'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { 
-  getBlockedTasksWithDetails, 
-  getBlockingTasksWithDetails,
   addBlockingRelationship,
   removeBlockingRelationship,
   searchTasks,
-  getBlockingTasks
+  Task
 } from '../services/tasks'
 import { XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { useDebounce } from '../hooks/useDebounce'
 
-type Task = Database['public']['Tables']['items']['Row']
+type SearchResult = {
+  id: string
+  title: string
+  completed: boolean
+}
 
 interface TaskBlockingButtonProps {
   task: Task
@@ -29,28 +30,16 @@ interface TaskBlockingModalProps {
 export const TaskBlockingButton = ({ task, className = '' }: TaskBlockingButtonProps) => {
   const [showBlockingModal, setShowBlockingModal] = useState(false)
 
-  const { data: blockingTasks = [] } = useQuery({
-    queryKey: ['blockingTasks', task.id],
-    queryFn: () => getBlockingTasks(task.id),
-  })
-
-  const { data: blockedTasks = [] } = useQuery({
-    queryKey: ['blockedTasks', task.id],
-    queryFn: () => getBlockedTasksWithDetails(task.id),
-  })
-
-  const isBlocked = blockingTasks.length > 0
-
   return (
     <>
       <button
         onClick={() => setShowBlockingModal(true)}
         className={`${className} flex items-center justify-center w-6 h-6 rounded-full ${
-          isBlocked ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
+          task.isBlocked ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
         }`}
-        title={isBlocked ? `${blockingTasks.length} tasks blocking this task` : `${blockedTasks.length} tasks blocked by this task`}
+        title={task.isBlocked ? `${task.blockedBy.length} tasks blocking this task` : `${task.blocking.length} tasks blocked by this task`}
       >
-        {isBlocked ? blockingTasks.length : blockedTasks.length}
+        {task.isBlocked ? task.blockedBy.length : task.blocking.length}
       </button>
 
       {showBlockingModal && (
@@ -68,16 +57,6 @@ export const TaskBlockingModal = ({ task, onClose }: TaskBlockingModalProps) => 
   const [searchQuery, setSearchQuery] = useState('')
   const debouncedSearchQuery = useDebounce(searchQuery, 300)
 
-  const { data: blockingTasks = [] } = useQuery({
-    queryKey: ['blockingTasksWithDetails', task.id],
-    queryFn: () => getBlockingTasksWithDetails(task.id),
-  })
-
-  const { data: blockedTasks = [] } = useQuery({
-    queryKey: ['blockedTasksWithDetails', task.id],
-    queryFn: () => getBlockedTasksWithDetails(task.id),
-  })
-
   const { data: searchResults = [] } = useQuery({
     queryKey: ['searchTasks', debouncedSearchQuery],
     queryFn: () => searchTasks(debouncedSearchQuery),
@@ -87,8 +66,7 @@ export const TaskBlockingModal = ({ task, onClose }: TaskBlockingModalProps) => 
   const addBlockingMutation = useMutation({
     mutationFn: (blockingTaskId: string) => addBlockingRelationship(blockingTaskId, task.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['blockingTasksWithDetails', task.id] })
-      queryClient.invalidateQueries({ queryKey: ['blockedTasksWithDetails', task.id] })
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
       setSearchQuery('')
     },
   })
@@ -96,8 +74,7 @@ export const TaskBlockingModal = ({ task, onClose }: TaskBlockingModalProps) => 
   const removeBlockingMutation = useMutation({
     mutationFn: (blockingTaskId: string) => removeBlockingRelationship(blockingTaskId, task.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['blockingTasksWithDetails', task.id] })
-      queryClient.invalidateQueries({ queryKey: ['blockedTasksWithDetails', task.id] })
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
 
@@ -114,19 +91,19 @@ export const TaskBlockingModal = ({ task, onClose }: TaskBlockingModalProps) => 
   }
 
   const isTaskBlocking = useCallback((taskId: string) => {
-    return blockingTasks.some(t => t.id === taskId)
-  }, [blockingTasks])
+    return task.blockedBy.some(t => t.id === taskId)
+  }, [task.blockedBy])
 
   const isTaskBlocked = useCallback((taskId: string) => {
-    return blockedTasks.some(t => t.id === taskId)
-  }, [blockedTasks])
+    return task.blocking.some(t => t.id === taskId)
+  }, [task.blocking])
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md">
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center">
-            <div className={`w-3 h-3 rounded-full mr-2 ${blockingTasks.length > 0 ? 'bg-red-500' : 'bg-green-500'}`} />
+            <div className={`w-3 h-3 rounded-full mr-2 ${task.isBlocked ? 'bg-red-500' : 'bg-green-500'}`} />
             <h2 className="text-xl font-semibold">Task Dependencies</h2>
           </div>
           <button
@@ -140,7 +117,7 @@ export const TaskBlockingModal = ({ task, onClose }: TaskBlockingModalProps) => 
         <div className="mb-6">
           <h3 className="text-lg font-medium mb-2">Tasks Blocking This Task</h3>
           <div className="space-y-2">
-            {blockingTasks.map(task => (
+            {task.blockedBy.map(task => (
               <div key={task.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                 <span className={task.completed ? 'line-through text-gray-500' : ''}>
                   {task.title}
@@ -153,7 +130,7 @@ export const TaskBlockingModal = ({ task, onClose }: TaskBlockingModalProps) => 
                 </button>
               </div>
             ))}
-            {blockingTasks.length === 0 && (
+            {task.blockedBy.length === 0 && (
               <p className="text-gray-500">No tasks are blocking this task</p>
             )}
           </div>
@@ -173,7 +150,7 @@ export const TaskBlockingModal = ({ task, onClose }: TaskBlockingModalProps) => 
           </div>
           {searchQuery && (
             <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-              {searchResults.map(result => (
+              {searchResults.map((result: SearchResult) => (
                 <div
                   key={result.id}
                   className={`flex items-center justify-between p-2 rounded ${
@@ -205,7 +182,7 @@ export const TaskBlockingModal = ({ task, onClose }: TaskBlockingModalProps) => 
         <div>
           <h3 className="text-lg font-medium mb-2">Blocked By This Task</h3>
           <div className="space-y-2">
-            {blockedTasks.map(task => (
+            {task.blocking.map(task => (
               <div key={task.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                 <span className={task.completed ? 'line-through text-gray-500' : ''}>
                   {task.title}
@@ -218,7 +195,7 @@ export const TaskBlockingModal = ({ task, onClose }: TaskBlockingModalProps) => 
                 </button>
               </div>
             ))}
-            {blockedTasks.length === 0 && (
+            {task.blocking.length === 0 && (
               <p className="text-gray-500">This task is not blocking any other tasks</p>
             )}
           </div>

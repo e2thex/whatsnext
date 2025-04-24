@@ -1,12 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Database } from '@/lib/supabase/client'
 import { useFilter } from '../contexts/FilterContext'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { TaskItem } from './TaskItem'
-
-type Task = Database['public']['Tables']['items']['Row']
+import { Task } from '../services/tasks'
 
 interface TreeViewProps {
   tasks: Task[]

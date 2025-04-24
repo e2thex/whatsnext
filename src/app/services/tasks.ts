@@ -4,36 +4,158 @@ import { supabase } from '@/lib/supabase/client'
 
 type Item = Database['public']['Tables']['items']['Row']
 type TaskDependency = Database['public']['Tables']['task_dependencies']['Row']
-type Task = Database['public']['Tables']['items']['Row']
+type BaseTask = Database['public']['Tables']['items']['Row']
 type TaskInsert = Database['public']['Tables']['items']['Insert']
 
-export const getTask = async (id: string): Promise<Item | null> => {
+export type Task = BaseTask & {
+  blockedBy: {
+    id: string
+    title: string
+    completed: boolean
+  }[]
+  blocking: {
+    id: string
+    title: string
+    completed: boolean
+  }[]
+  isBlocked: boolean
+}
+
+export const getTask = async (id: string): Promise<Task | null> => {
   const supabase = createClientComponentClient<Database>()
-  const { data, error } = await supabase
+  const { data: task, error: taskError } = await supabase
     .from('items')
     .select('*')
     .eq('id', id)
     .single()
 
-  if (error) {
-    throw error
+  if (taskError) {
+    throw taskError
   }
 
-  return data
+  if (!task) {
+    return null
+  }
+
+  // Get tasks that are blocking this task
+  const { data: blockedBy, error: blockedByError } = await supabase
+    .from('task_dependencies')
+    .select(`
+      blocking_task_id,
+      blocking_task:blocking_task_id (
+        id,
+        title,
+        completed
+      )
+    `)
+    .eq('blocked_task_id', id)
+
+  if (blockedByError) {
+    throw blockedByError
+  }
+
+  // Get tasks that this task is blocking
+  const { data: blocking, error: blockingError } = await supabase
+    .from('task_dependencies')
+    .select(`
+      blocked_task_id,
+      blocked_task:blocked_task_id (
+        id,
+        title,
+        completed
+      )
+    `)
+    .eq('blocking_task_id', id)
+
+  if (blockingError) {
+    throw blockingError
+  }
+
+  return {
+    ...task,
+    blockedBy: (blockedBy || []).map(dep => dep.blocking_task),
+    blocking: (blocking || []).map(dep => dep.blocked_task),
+    isBlocked: (blockedBy || []).length > 0
+  }
 }
 
-export const getTasks = async (): Promise<Item[]> => {
+type TaskDependencyWithDetails = {
+  blocking_task_id: string
+  blocked_task_id: string
+  blocking_task: {
+    id: string
+    title: string
+    completed: boolean
+  }
+  blocked_task: {
+    id: string
+    title: string
+    completed: boolean
+  }
+}
+
+export const getTasks = async (): Promise<Task[]> => {
   const supabase = createClientComponentClient<Database>()
-  const { data, error } = await supabase
+  const { data: tasks, error: tasksError } = await supabase
     .from('items')
     .select('*')
     .order('position', { ascending: true })
 
-  if (error) {
-    throw error
+  if (tasksError) {
+    throw tasksError
   }
 
-  return data || []
+  if (!tasks) {
+    return []
+  }
+
+  // Get all task dependencies in one query
+  const { data: dependencies, error: dependenciesError } = await supabase
+    .from('task_dependencies')
+    .select(`
+      blocking_task_id,
+      blocked_task_id,
+      blocking_task:blocking_task_id (
+        id,
+        title,
+        completed
+      ),
+      blocked_task:blocked_task_id (
+        id,
+        title,
+        completed
+      )
+    `)
+
+  if (dependenciesError) {
+    throw dependenciesError
+  }
+
+  // Create a map of task IDs to their blocking relationships
+  const taskMap = new Map<string, Task>()
+  tasks.forEach(task => {
+    taskMap.set(task.id, {
+      ...task,
+      blockedBy: [],
+      blocking: [],
+      isBlocked: false
+    })
+  })
+
+  // Add blocking relationships to the tasks
+  const typedDependencies = dependencies as unknown as TaskDependencyWithDetails[]
+  typedDependencies?.forEach((dep: TaskDependencyWithDetails) => {
+    const blockingTask = taskMap.get(dep.blocking_task_id)
+    const blockedTask = taskMap.get(dep.blocked_task_id)
+
+    if (blockingTask && blockedTask) {
+      blockingTask.blocking.push(dep.blocked_task)
+      blockedTask.blockedBy.push(dep.blocking_task)
+      blockedTask.isBlocked = true
+    }
+  })
+
+  return Array.from(taskMap.values())
 }
 
 export const updateTask = async (id: string, updates: Partial<Item>): Promise<Item> => {
@@ -143,15 +265,6 @@ type TaskWithDetails = {
   id: string
   title: string
   completed: boolean
-}
-
-type TaskDependencyWithDetails = {
-  blocked_task_id: string
-  blocked_task: {
-    id: string
-    title: string
-    completed: boolean
-  }
 }
 
 type BlockingTaskDependencyWithDetails = {
