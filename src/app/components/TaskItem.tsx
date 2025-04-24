@@ -104,7 +104,7 @@ export const TaskItem = ({
   const taskTypeCapitalized = taskType.charAt(0).toUpperCase() + taskType.slice(1) as keyof typeof typeColors
 
   return (
-    <div className={`${className} ${task.isBlocked ? 'opacity-50' : ''}`}>
+    <div className={className}>
       {showParentHierarchy && <BreadcrumbNav taskId={task.id} />}
       <div className="flex items-center">
         <input
