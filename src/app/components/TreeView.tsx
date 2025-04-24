@@ -1,18 +1,78 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useFilter } from '../contexts/FilterContext'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { TaskItem } from './TaskItem'
 import { Task } from '../services/tasks'
-import { taskOrDescendantsMatchFilter } from '../utils/taskUtils'
+import { getDefaultIsExpanded, taskOrDescendantsMatchFilter } from '../utils/taskUtils'
 
 interface TreeViewProps {
   tasks: Task[]
 }
 
+interface TreeNodeProps {
+  task: Task
+  level?: number
+  tasks: Task[]
+}
+
+const TreeNode = ({ task, level = 0, tasks }: TreeNodeProps) => {
+  const { filter } = useFilter();
+  const children = tasks.filter((t) => t.parent_id === task.id)
+  const defaultisExpanded = getDefaultIsExpanded(filter, task)
+  const [localIsExpanded, setLocalIsExpanded] = useState<boolean | null>(null)
+  const isExpanded = localIsExpanded === null ? defaultisExpanded : localIsExpanded
+  const setIsExpanded = (value: boolean | null) => {
+    setLocalIsExpanded(value)
+  }
+
+  // Reset localIsExpanded when filter changes
+  useEffect(() => {
+    setLocalIsExpanded(null)
+  }, [filter])
+
+  // Apply filters
+  if (!taskOrDescendantsMatchFilter(task, tasks, filter)) return null
+
+  return (
+    <div key={task.id} className="pl-4">
+      <div className="flex items-center py-2">
+        <div className="flex items-center">
+          {level > 0 && (
+            <div className="w-4 h-px bg-gray-300 mr-2" />
+          )}
+          {children.length > 0 && (
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="w-4 h-4 flex items-center justify-center text-gray-500 hover:text-gray-700"
+            >
+              {isExpanded ? '−' : '+'}
+            </button>
+          )}
+          {children.length === 0 && <div className="w-4" />}
+        </div>
+        <div className="flex-1">
+          <TaskItem 
+            task={task}
+            showParentHierarchy={false}
+            className="flex-1"
+          />
+        </div>
+      </div>
+      {isExpanded && children.map((child) => (
+        <TreeNode 
+          key={child.id}
+          task={child}
+          level={level + 1}
+          tasks={tasks}
+        />
+      ))}
+    </div>
+  )
+}
+
 export const TreeView = ({ tasks }: TreeViewProps) => {
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const { filter, updateFilter } = useFilter()
 
   // Get focused item and its hierarchy
@@ -31,55 +91,6 @@ export const TreeView = ({ tasks }: TreeViewProps) => {
     }
     return hierarchy
   })() : []
-
-  const toggleNode = (nodeId: string) => {
-    setExpandedNodes((prev) => {
-      const next = new Set(prev)
-      if (next.has(nodeId)) {
-        next.delete(nodeId)
-      } else {
-        next.add(nodeId)
-      }
-      return next
-    })
-  }
-
-  const renderNode = (task: Task, level: number = 0) => {
-    const children = tasks.filter((t) => t.parent_id === task.id)
-    const isExpanded = expandedNodes.has(task.id)
-
-    // Apply filters
-    if (!taskOrDescendantsMatchFilter(task, tasks, filter)) return null
-
-    return (
-      <div key={task.id} className="pl-4">
-        <div className="flex items-center py-2">
-          <div className="flex items-center">
-            {level > 0 && (
-              <div className="w-4 h-px bg-gray-300 mr-2" />
-            )}
-            {children.length > 0 && (
-              <button
-                onClick={() => toggleNode(task.id)}
-                className="w-4 h-4 flex items-center justify-center text-gray-500 hover:text-gray-700"
-              >
-                {isExpanded ? '−' : '+'}
-              </button>
-            )}
-            {children.length === 0 && <div className="w-4" />}
-          </div>
-          <div className="flex-1">
-            <TaskItem 
-              task={task}
-              showParentHierarchy={false}
-              className="flex-1"
-            />
-          </div>
-        </div>
-        {isExpanded && children.map((child) => renderNode(child, level + 1))}
-      </div>
-    )
-  }
 
   return (
     <div className="w-full">
@@ -112,7 +123,13 @@ export const TreeView = ({ tasks }: TreeViewProps) => {
 
       {tasks
         .filter((task) => !task.parent_id)
-        .map((task) => renderNode(task))}
+        .map((task) => (
+          <TreeNode 
+            key={task.id}
+            task={task}
+            tasks={tasks}
+          />
+        ))}
     </div>
   )
 } 

@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createTask, getTask, updateTask } from '../services/tasks'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { createTask, updateTask } from '../services/tasks'
 import { useFilter } from '../contexts/FilterContext'
 import { MagnifyingGlassIcon, PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { TaskEditor } from './TaskEditor'
@@ -10,6 +10,7 @@ import { TaskBlockingButton } from './TaskBlockingModal'
 import { Task } from '../services/tasks'
 import typeIcons, { typeColors } from './typeIcons'
 import { determineTaskType } from '../utils/taskUtils'
+import BreadcrumbNav from './BreadcrumbNav'
 
 type TaskType = 'Task' | 'Mission' | 'Objective' | 'Ambition'
 
@@ -30,30 +31,6 @@ export const TaskItem = ({
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false)
-
-  // Get parent hierarchy
-  const { data: parentHierarchy = [] } = useQuery({
-    queryKey: ['parentHierarchy', task.id],
-    queryFn: async () => {
-      const hierarchy: Task[] = []
-      const visitedIds = new Set<string>()
-      let currentItem = task
-
-      while (currentItem.parent_id && !visitedIds.has(currentItem.parent_id)) {
-        visitedIds.add(currentItem.parent_id)
-        const parent = await getTask(currentItem.parent_id)
-        if (parent) {
-          hierarchy.unshift(parent)
-          currentItem = parent
-        } else {
-          break
-        }
-      }
-
-      return hierarchy
-    },
-    enabled: showParentHierarchy
-  })
 
   const updateTaskMutation = useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Task> }) =>
@@ -98,10 +75,6 @@ export const TaskItem = ({
     setIsEditing(false)
   }
 
-  const handleParentClick = (parentId: string) => {
-    updateFilter({ focusedItemId: parentId })
-  }
-
   const handleFocus = () => {
     updateFilter({ focusedItemId: task.id })
   }
@@ -136,21 +109,7 @@ export const TaskItem = ({
 
   return (
     <div className={`${className} ${task.isBlocked ? 'opacity-50' : ''}`}>
-      {showParentHierarchy && parentHierarchy.length > 0 && (
-        <div className="mb-2 flex items-center text-sm text-gray-500">
-          {parentHierarchy.map((parent, index) => (
-            <span key={parent.id} className="flex items-center">
-              {index > 0 && <span className="mx-1">/</span>}
-              <button
-                onClick={() => handleParentClick(parent.id)}
-                className="hover:text-indigo-600"
-              >
-                {parent.title}
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
+      {showParentHierarchy && <BreadcrumbNav taskId={task.id} />}
       <div className="flex items-center">
         <input
           type="checkbox"

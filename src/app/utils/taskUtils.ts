@@ -12,7 +12,7 @@ export const taskOrDescendantsMatchFilter = (task: Task, tasks: Task[], filter: 
     (filter.blocking === 'blocked' && !task.isBlocked) ||
     (filter.blocking === 'actionable' && task.isBlocked) ||
     (filter.blocking === 'blocking' && task.blocking.length === 0) ||
-    (filter.type !== 'all' && effectiveType !== filter.type) ||
+    // (filter.type !== 'all' && effectiveType !== filter.type) ||
     (filter.search && !task.title.toLowerCase().includes(filter.search.toLowerCase()))
   )
 
@@ -40,7 +40,7 @@ export const taskOrDescendantsMatchFilter = (task: Task, tasks: Task[], filter: 
       (filter.blocking === 'blocked' && !descendant.isBlocked) ||
       (filter.blocking === 'actionable' && descendant.isBlocked) ||
       (filter.blocking === 'blocking' && descendant.blocking.length === 0) ||
-      (filter.type !== 'all' && descendantEffectiveType !== filter.type) ||
+    //   (filter.type !== 'all' && descendantEffectiveType !== filter.type) ||
       (filter.search && !descendant.title.toLowerCase().includes(filter.search.toLowerCase()))
     )
   })
@@ -88,3 +88,18 @@ export const determineTaskType = (task: Task, tasks: Task[]): 'Task' | 'Mission'
   // Default to task if none of the above conditions are met
   return 'Task'
 } 
+export const getDefaultIsExpanded = (filter: FilterState, task: Task): boolean => {
+  if (filter.type === 'all') return true;
+  
+  const typeHierarchy: Record<string, number> = {
+    'Ambition': 4,
+    'Objective': 3,
+    'Mission': 2,
+    'Task': 1
+  };
+  
+  const filterLevel = typeHierarchy[filter.type];
+  const taskLevel = typeHierarchy[task.effectiveType];
+  
+  return taskLevel > filterLevel;
+}

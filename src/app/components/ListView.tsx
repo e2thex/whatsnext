@@ -53,10 +53,14 @@ export const ListView = ({ tasks }: ListViewProps) => {
       }
 
       const descendants = getDescendants(filter.focusedItemId)
-      return descendants.filter(task => !tasks.some(t => t.parent_id === task.id))
+      return filter.type === 'all' 
+        ? descendants.filter(task => !tasks.some(t => t.parent_id === task.id))
+        : descendants.filter(task => task.effectiveType === filter.type)
     }
-    return tasks.filter((task) => !tasks.some((t) => t.parent_id === task.id))
-  }, [tasks, filter.focusedItemId])
+    return filter.type === 'all' 
+      ? tasks.filter((task) => !tasks.some((t) => t.parent_id === task.id))
+      : tasks.filter(task => task.effectiveType === filter.type)
+  }, [tasks, filter.focusedItemId, filter.type])
 
   // Memoize filtered and sorted tasks
   const filteredTasks = useMemo(() => {
