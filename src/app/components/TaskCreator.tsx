@@ -7,6 +7,8 @@ import { createTask } from '../services/tasks'
 import { PlusIcon } from '@heroicons/react/24/outline'
 import { TaskEditor } from './TaskEditor'
 import { useFilter } from '../contexts/FilterContext'
+import { useQuery } from '@tanstack/react-query'
+import { getTasks } from '../services/tasks'
 
 type Task = Database['public']['Tables']['items']['Row']
 
@@ -14,6 +16,11 @@ export const TaskCreator = () => {
   const [isCreatingTask, setIsCreatingTask] = useState(false)
   const { filter } = useFilter()
   const queryClient = useQueryClient()
+
+  const { data: tasks = [] } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: getTasks,
+  })
 
   const createTaskMutation = useMutation({
     mutationFn: createTask,
@@ -37,6 +44,7 @@ export const TaskCreator = () => {
             manual_type: false
           }}
           onCancel={() => setIsCreatingTask(false)}
+          tasks={tasks}
         />
       </div>
     )

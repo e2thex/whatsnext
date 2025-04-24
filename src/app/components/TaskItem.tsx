@@ -152,6 +152,7 @@ export const TaskItem = ({
             <TaskEditor
               task={task}
               onCancel={handleCancel}
+              tasks={tasks}
             />
           </div>
         ) : (
