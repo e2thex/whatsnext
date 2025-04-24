@@ -5,6 +5,7 @@ import { useFilter } from '../contexts/FilterContext'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { TaskItem } from './TaskItem'
 import { Task } from '../services/tasks'
+import { taskOrDescendantsMatchFilter } from '../utils/taskUtils'
 
 interface TreeViewProps {
   tasks: Task[]
@@ -48,12 +49,7 @@ export const TreeView = ({ tasks }: TreeViewProps) => {
     const isExpanded = expandedNodes.has(task.id)
 
     // Apply filters
-    if (filter.completion === 'todo' && task.completed) return null
-    if (filter.completion === 'done' && !task.completed) return null
-    if (filter.blocking === 'blocked' && !task.isBlocked) return null
-    if (filter.blocking === 'actionable' && task.isBlocked) return null
-    if (filter.blocking === 'blocking' && task.blocking.length === 0) return null
-    if (filter.search && !task.title.toLowerCase().includes(filter.search.toLowerCase())) return null
+    if (!taskOrDescendantsMatchFilter(task, tasks, filter)) return null
 
     return (
       <div key={task.id} className="pl-4">

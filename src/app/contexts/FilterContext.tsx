@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react'
 
-type FilterState = {
+export type FilterState = {
   viewMode: 'list' | 'tree'
   completion: 'all' | 'todo' | 'done'
   blocking: 'all' | 'blocked' | 'actionable' | 'blocking'
