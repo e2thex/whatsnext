@@ -4,13 +4,14 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createTask, updateTask } from '../services/tasks'
 import { useFilter } from '../contexts/FilterContext'
-import { MagnifyingGlassIcon, PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
+import { MagnifyingGlassIcon, PlusIcon, PencilIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { TaskEditor } from './TaskEditor'
 import { TaskBlockingButton } from './TaskBlockingModal'
 import { Task } from '../services/tasks'
 import typeIcons, { typeColors } from './typeIcons'
 import { determineTaskType } from '../utils/taskUtils'
 import BreadcrumbNav from './BreadcrumbNav'
+import { AddSubtaskForm } from './AddSubtaskForm'
 
 type TaskType = 'Task' | 'Mission' | 'Objective' | 'Ambition'
 
@@ -18,17 +19,18 @@ interface TaskItemProps {
   task: Task
   showParentHierarchy?: boolean
   className?: string
+  tasks: Task[]
 }
 
 export const TaskItem = ({ 
   task, 
   showParentHierarchy = false, 
-  className = ''
+  className = '',
+  tasks
 }: TaskItemProps) => {
   const queryClient = useQueryClient()
   const { filter, updateFilter } = useFilter()
   const [isAddingSubtask, setIsAddingSubtask] = useState(false)
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false)
 
@@ -49,7 +51,6 @@ export const TaskItem = ({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       setIsAddingSubtask(false)
-      setNewSubtaskTitle('')
     },
   })
 
@@ -58,13 +59,6 @@ export const TaskItem = ({
       id: task.id,
       updates: { completed: !task.completed },
     })
-  }
-
-  const handleAddSubtask = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (newSubtaskTitle.trim()) {
-      createSubtaskMutation.mutate(newSubtaskTitle.trim())
-    }
   }
 
   const handleEdit = () => {
@@ -203,32 +197,20 @@ export const TaskItem = ({
         </button>
       </div>
       {isAddingSubtask && (
-        <form onSubmit={handleAddSubtask} className="mt-2 ml-6 flex gap-2">
-          <input
-            type="text"
-            value={newSubtaskTitle}
-            onChange={(e) => setNewSubtaskTitle(e.target.value)}
-            placeholder="Add subtask..."
-            className="flex-1 rounded border p-1 text-sm"
-            autoFocus
-          />
-          <button
-            type="submit"
-            className="rounded bg-blue-500 px-2 py-1 text-sm text-white hover:bg-blue-600"
-          >
-            Add
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsAddingSubtask(false)
-              setNewSubtaskTitle('')
-            }}
-            className="rounded border px-2 py-1 text-sm text-gray-600 hover:bg-gray-100"
-          >
-            Cancel
-          </button>
-        </form>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Add Subtask</h2>
+              <button
+                onClick={() => setIsAddingSubtask(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+            <AddSubtaskForm task={task} onClose={() => setIsAddingSubtask(false)} tasks={tasks} />
+          </div>
+        </div>
       )}
     </div>
   )

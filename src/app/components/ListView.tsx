@@ -129,6 +129,7 @@ export const ListView = ({ tasks }: ListViewProps) => {
               <TaskItem 
                 task={task}
                 showParentHierarchy={true}
+                tasks={tasks}
               />
             </li>
           ))}

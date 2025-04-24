@@ -57,6 +57,7 @@ const TreeNode = ({ task, level = 0, tasks }: TreeNodeProps) => {
             task={task}
             showParentHierarchy={false}
             className="flex-1"
+            tasks={tasks}
           />
         </div>
       </div>
