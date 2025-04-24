@@ -3,10 +3,11 @@
 import { useState } from 'react'
 import { Database } from '@/lib/supabase/client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createTask, getBlockingTasks, getTask, updateTask } from '../services/tasks'
+import { createTask, getBlockingTasks, getTask, updateTask, getBlockedTasksWithDetails, getBlockingTasksWithDetails } from '../services/tasks'
 import { useFilter } from '../contexts/FilterContext'
 import { MagnifyingGlassIcon, PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { TaskEditor } from './TaskEditor'
+import { TaskBlockingButton } from './TaskBlockingModal'
 
 type Task = Database['public']['Tables']['items']['Row']
 
@@ -26,10 +27,16 @@ export const TaskItem = ({
   const [isAddingSubtask, setIsAddingSubtask] = useState(false)
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
   const [isEditing, setIsEditing] = useState(false)
+  const [showBlockingModal, setShowBlockingModal] = useState(false)
 
   const { data: blockingTasks = [] } = useQuery({
     queryKey: ['blockingTasks', task.id],
     queryFn: () => getBlockingTasks(task.id),
+  })
+
+  const { data: blockedTasks = [] } = useQuery({
+    queryKey: ['blockedTasks', task.id],
+    queryFn: () => getBlockedTasksWithDetails(task.id),
   })
 
   // Get parent hierarchy
@@ -78,12 +85,9 @@ export const TaskItem = ({
   })
 
   const handleToggleComplete = () => {
-    updateTaskMutation.mutate({ 
-      id: task.id, 
-      updates: { 
-        completed: !task.completed,
-        completed_at: !task.completed ? new Date().toISOString() : null
-      } 
+    updateTaskMutation.mutate({
+      id: task.id,
+      updates: { completed: !task.completed },
     })
   }
 
@@ -137,6 +141,7 @@ export const TaskItem = ({
           onChange={handleToggleComplete}
           className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
         />
+        <TaskBlockingButton task={task} className="ml-2" />
         {isEditing ? (
           <div className="ml-2 flex-1">
             <TaskEditor
