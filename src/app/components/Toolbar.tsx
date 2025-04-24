@@ -14,7 +14,8 @@ import {
   NoSymbolIcon,
   ArrowUturnLeftIcon,
   FunnelIcon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  Squares2X2Icon
 } from '@heroicons/react/24/outline'
 import typeIcons from './typeIcons'
 
@@ -63,7 +64,7 @@ const filterGroups: FilterGroup[] = [
     title: 'Task Type',
     type: 'type',
     options: [
-      { value: 'all', label: 'All Types', icon: <CircleStackIcon className="h-5 w-5" /> },
+      { value: 'all', label: 'All Types', icon: <Squares2X2Icon className="h-5 w-5" /> },
       { value: 'Task', label: 'Tasks', icon: typeIcons.Task, color: 'blue' },
       { value: 'Mission', label: 'Missions', icon: typeIcons.Mission, color: 'green' },
       { value: 'Objective', label: 'Objectives', icon: typeIcons.Objective, color: 'purple' },
