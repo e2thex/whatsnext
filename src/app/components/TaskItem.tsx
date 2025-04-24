@@ -12,6 +12,7 @@ import typeIcons, { typeColors } from './typeIcons'
 import { determineTaskType } from '../utils/taskUtils'
 import BreadcrumbNav from './BreadcrumbNav'
 import { AddSubtaskForm } from './AddSubtaskForm'
+import { TaskDeleteModal } from './TaskDeleteModal'
 
 type TaskType = 'Task' | 'Mission' | 'Objective' | 'Ambition'
 
@@ -33,6 +34,7 @@ export const TaskItem = ({
   const [isAddingSubtask, setIsAddingSubtask] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
 
   const updateTaskMutation = useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Task> }) =>
@@ -195,6 +197,13 @@ export const TaskItem = ({
         >
           <MagnifyingGlassIcon className="h-4 w-4" />
         </button>
+        <button
+          onClick={() => setIsDeleteModalOpen(true)}
+          className="ml-2 p-1 rounded-full hover:bg-gray-100 text-gray-500 hover:text-red-500"
+          title="Delete task"
+        >
+          <XMarkIcon className="h-4 w-4" />
+        </button>
       </div>
       {isAddingSubtask && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -211,6 +220,13 @@ export const TaskItem = ({
             <AddSubtaskForm task={task} onClose={() => setIsAddingSubtask(false)} tasks={tasks} />
           </div>
         </div>
+      )}
+      {isDeleteModalOpen && (
+        <TaskDeleteModal
+          task={task}
+          onClose={() => setIsDeleteModalOpen(false)}
+          tasks={tasks}
+        />
       )}
     </div>
   )

@@ -303,4 +303,53 @@ export const searchTasks = async (query: string): Promise<TaskWithDetails[]> => 
   }
 
   return data
+}
+
+export const deleteTask = async (id: string): Promise<void> => {
+  const supabase = createClientComponentClient<Database>()
+  
+  // First delete any task dependencies where this task is either blocking or blocked
+  const { error: dependencyError } = await supabase
+    .from('task_dependencies')
+    .delete()
+    .or(`blocking_task_id.eq.${id},blocked_task_id.eq.${id}`)
+
+  if (dependencyError) {
+    throw dependencyError
+  }
+
+  // Then delete the task itself
+  const { error } = await supabase
+    .from('items')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    throw error
+  }
+}
+
+export const moveChildrenUp = async (taskId: string): Promise<void> => {
+  const supabase = createClientComponentClient<Database>()
+  
+  // First get the parent_id of the task being deleted
+  const { data: task, error: taskError } = await supabase
+    .from('items')
+    .select('parent_id')
+    .eq('id', taskId)
+    .single()
+
+  if (taskError) {
+    throw taskError
+  }
+
+  // Then update all children to have that parent_id
+  const { error } = await supabase
+    .from('items')
+    .update({ parent_id: task.parent_id })
+    .eq('parent_id', taskId)
+
+  if (error) {
+    throw error
+  }
 } 
