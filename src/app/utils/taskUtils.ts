@@ -103,3 +103,36 @@ export const getDefaultIsExpanded = (filter: FilterState, task: Task): boolean =
   
   return taskLevel > filterLevel;
 }
+
+export const shouldTaskBeBlockedByDescendants = (task: Task, tasks: Task[]): boolean => {
+  // Get all descendants of this task
+  const getDescendants = (itemId: string): Task[] => {
+    const descendants: Task[] = []
+    const queue = [itemId]
+    while (queue.length > 0) {
+      const currentId = queue.shift()!
+      const children = tasks.filter(t => t.parent_id === currentId)
+      descendants.push(...children)
+      queue.push(...children.map(c => c.id))
+    }
+    return descendants
+  }
+
+  const descendants = getDescendants(task.id)
+  
+  // If there are no descendants, the task cannot be blocked by them
+  if (descendants.length === 0) {
+    return false
+  }
+
+  // Get all uncompleted descendants
+  const uncompletedDescendants = descendants.filter(d => !d.completed)
+
+  // If there are no uncompleted descendants, the task cannot be blocked by them
+  if (uncompletedDescendants.length === 0) {
+    return false
+  }
+
+  // The task should be blocked if all uncompleted descendants are blocked
+  return uncompletedDescendants.every(d => d.isBlocked)
+}

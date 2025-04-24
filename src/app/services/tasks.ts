@@ -1,7 +1,7 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Database } from '@/lib/supabase/client'
 import { supabase } from '@/lib/supabase/client'
-import { determineTaskType } from '../utils/taskUtils'
+import { determineTaskType, shouldTaskBeBlockedByDescendants } from '../utils/taskUtils'
 
 type Item = Database['public']['Tables']['items']['Row']
 type TaskDependency = Database['public']['Tables']['task_dependencies']['Row']
@@ -142,8 +142,8 @@ export const getTasksHelper = async (taskIds?: string[]): Promise<Task[]> => {
   const idsToFetch = tasks.map(task => task.id)
   const taskMap = await fetchTaskDependencies(supabase, idsToFetch)
 
-  // Merge the base task data with the dependency data and determine effective type
-  return tasks.map(task => {
+  // First pass: Merge the base task data with the dependency data and determine effective type
+  const tasksWithDeps = tasks.map(task => {
     const taskWithDeps = {
       ...task,
       ...(taskMap.get(task.id) || { blockedBy: [], blocking: [], isBlocked: false })
@@ -152,6 +152,15 @@ export const getTasksHelper = async (taskIds?: string[]): Promise<Task[]> => {
     return {
       ...taskWithDeps,
       effectiveType: determineTaskType(taskWithDeps, tasks)
+    }
+  })
+
+  // Second pass: Apply descendant-based blocking
+  return tasksWithDeps.map(task => {
+    const isBlockedByDescendants = shouldTaskBeBlockedByDescendants(task, tasksWithDeps)
+    return {
+      ...task,
+      isBlocked: task.isBlocked || isBlockedByDescendants
     }
   })
 }
