@@ -4,10 +4,12 @@ import { Slate, Editable, withReact, ReactEditor } from 'slate-react'
 import { withHistory, HistoryEditor } from 'slate-history'
 import { Database } from '@/lib/supabase/client'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { updateTask, createTask, addBlockingRelationship, removeBlockingRelationship } from '../services/tasks'
+import { updateTask, createTask, addBlockingRelationship, removeBlockingRelationship, deleteTask } from '../services/tasks'
 import type { Task } from '../services/tasks'
 import { MentionPill } from './MentionPill'
 import { MentionDropdown } from './MentionDropdown'
+import { SubtaskPill } from './SubtaskPill'
+import { TaskDeleteModal } from './TaskDeleteModal'
 import toast from 'react-hot-toast'
 
 type DatabaseTask = Database['public']['Tables']['items']['Row']
@@ -15,11 +17,13 @@ type TaskInput = Omit<DatabaseTask, 'id' | 'created_at' | 'completed_at' | 'user
 
 interface TaskEditorProps {
   task: Partial<Task> & {
+    id?: string
     blockedBy?: {
       id: string
       title: string
       completed: boolean
     }[]
+    subtasks?: Task[]
   }
   onCancel: () => void
   tasks: Task[]
@@ -33,11 +37,16 @@ type MentionElement = {
   task: { id: string; title: string; completed: boolean }; 
   children: CustomText[] 
 }
+type SubtaskElement = {
+  type: 'subtask';
+  task: Task;
+  children: CustomText[];
+}
 
 declare module 'slate' {
   interface CustomTypes {
     Editor: BaseEditor & ReactEditor & HistoryEditor
-    Element: CustomElement | MentionElement
+    Element: CustomElement | MentionElement | SubtaskElement
     Text: CustomText
   }
 }
@@ -52,32 +61,48 @@ const initialValue: Descendant[] = [
 export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
   const queryClient = useQueryClient()
   const [mentions, setMentions] = useState<{ id: string; title: string; completed: boolean }[]>(() => task.blockedBy || [])
+  const [subtasks, setSubtasks] = useState<Task[]>(() => task.subtasks || [])
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 })
   const [mentionQuery, setMentionQuery] = useState('')
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null)
+  const [subtasksToDelete, setSubtasksToDelete] = useState<Task[]>([])
 
   // Create a Slate editor object that won't change across renders
   const editor = useMemo(() => withHistory(withReact(createEditor())), [])
 
   // Initialize the editor with the task's content
   useEffect(() => {
-    const content = task.title + (task.description ? '\n' + task.description : '') + (task.blockedBy ? '\n' + task.blockedBy.map(t => `@${t.id}`).join('\n') : '')
-     
-    // Create initial editor content with mentions
-    const initialContent: (CustomElement | MentionElement)[] = []
-    let currentText = ''
+    console.log('Initializing editor with task:', task)
+    console.log('Task subtasks:', task.subtasks)
     
-    // Split content by newlines to handle multi-line content
+    const initialContent: (CustomElement | MentionElement | SubtaskElement)[] = []
+    
+    // Add title
     initialContent.push({
       type: 'paragraph',
       children: [{ text: task.title || '' }],
     })
+
+    // Add description if exists
     if (task.description) {
       initialContent.push({
         type: 'paragraph',
         children: [{ text: task.description }],
       })
     }
+
+    // Add subtasks
+    tasks.filter(t => t.parent_id === task.id).forEach((subtask) => {
+      console.log('Adding subtask to editor:', subtask)
+      initialContent.push({
+        type: 'subtask',
+        task: subtask,
+        children: [{ text: '' }],
+      })
+    })
+
+    // Add mentions
     task.blockedBy?.forEach((mention) => {
       initialContent.push({
         type: 'mention',
@@ -85,10 +110,8 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
         children: [{ text: '' }],
       })
     })
-    
-    console.log(initialContent)
+    console.log('Final editor content:', initialContent)
     editor.children = initialContent
-    // Force a re-render of the editor
     editor.onChange()
   }, [editor, task])
 
@@ -105,7 +128,7 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
       console.error('Error updating task:', error)
     },
   })
-
+  console.log(task)
   const createTaskMutation = useMutation({
     mutationFn: createTask,
     onSuccess: () => {
@@ -145,39 +168,131 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
     }
   })
 
-  const handleSave = () => {
-    const [title, ...descriptionLines] = editor.children
-      .map((node: Descendant) => {
-        if ('type' in node && node.type === 'paragraph') {
-          return node.children.map((textNode: CustomText) => textNode.text).join('')
-        }
-        return ''
+  const createSubtaskMutation = useMutation({
+    mutationFn: async ({ title, parentId, position }: { title: string; parentId: string; position: number }) => {
+      return createTask({
+        title,
+        parent_id: parentId,
+        position,
+        type: 'Task',
+        manual_type: false,
+        completed: false
       })
+    },
+    onSuccess: (newSubtask) => {
+      setSubtasks(prev => [...prev, newSubtask])
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    },
+    onError: (error) => {
+      toast.error('Failed to create subtask')
+      console.error('Error creating subtask:', error)
+    }
+  })
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: deleteTask,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    },
+    onError: (error) => {
+      toast.error('Failed to delete subtask')
+      console.error('Error deleting subtask:', error)
+    }
+  })
+
+  const handleDeleteSubtask = (taskToDelete: Task) => {
+    // Find the index of the subtask node to delete
+    const subtaskIndex = editor.children.findIndex(
+      node => 'type' in node && node.type === 'subtask' && 'task' in node && node.task.id === taskToDelete.id
+    )
     
-    if (title.trim()) {
+    if (subtaskIndex !== -1) {
+      Transforms.removeNodes(editor, { at: [subtaskIndex] })
+      setTaskToDelete(taskToDelete)
+    }
+  }
+
+  const handleSave = () => {
+    // First, map the editor content into a structured format
+    const processedNodes = editor.children.map((node, index) => {
+      if ('type' in node) {
+        switch (node.type) {
+          case 'paragraph':
+            const text = node.children.map((textNode: CustomText) => textNode.text).join('')
+            if (index === 0) {
+              return { type: 'title' as const, content: text }
+            } else if (text.startsWith('- ')) {
+              return { 
+                type: 'subtask' as const, 
+                content: {
+                  title: text.substring(2),
+                  nodeId: null 
+                }
+              }
+            } else {
+              return { type: 'description' as const, content: text }
+            }
+          case 'subtask':
+            return { 
+              type: 'subtask' as const, 
+              content: {
+                title: node.task.title,
+                nodeId: node.task.id
+              }
+            }
+          case 'mention':
+            return { type: 'mention' as const, content: node.task }
+          default:
+            return { type: 'unknown' as const, content: node }
+        }
+      }
+      return { type: 'unknown' as const, content: node }
+    })
+
+    // Then reduce into separate arrays for each type
+    const content = processedNodes.reduce((acc, node) => {
+      switch (node.type) {
+        case 'title':
+          acc.title = node.content as string
+          break
+        case 'description':
+          acc.description.push(node.content as string)
+          break
+        case 'subtask':
+          acc.subtasks.push(node.content as { title: string; nodeId: string })
+          break
+        case 'mention':
+          acc.mentions.push(node.content as { id: string; title: string; completed: boolean })
+          break
+      }
+      return acc
+    }, {
+      title: '',
+      description: [] as string[],
+      subtasks: [] as { title: string; nodeId: string }[],
+      mentions: [] as { id: string; title: string; completed: boolean }[]
+    })
+
+    if (content.title.trim()) {
       if (task.id) {
+        // Update the main task
         updateTaskMutation.mutate({ 
           id: task.id, 
           updates: {
-            title: title.trim(),
-            description: descriptionLines.join('\n').trim() || null
+            title: content.title.trim(),
+            description: content.description.join('\n').trim() || null
           }
         })
 
-        // Get existing blocked-by relationships
+        // Handle mentions
         const existingBlockedBy = task.blockedBy || []
-        
-        // Find relationships to remove (existing ones not in new mentions)
         const relationshipsToRemove = existingBlockedBy.filter(
-          existing => !mentions.some(mention => mention.id === existing.id)
+          existing => !content.mentions.some(mention => mention.id === existing.id)
         )
-
-        // Find relationships to add (new mentions not in existing ones)
-        const relationshipsToAdd = mentions.filter(
+        const relationshipsToAdd = content.mentions.filter(
           mention => !existingBlockedBy.some(existing => existing.id === mention.id)
         )
 
-        // Remove old relationships
         relationshipsToRemove.forEach(({ id }) => {
           if (task.id) {
             removeBlockingRelationshipMutation.mutate({
@@ -187,7 +302,6 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
           }
         })
 
-        // Add new relationships
         relationshipsToAdd.forEach(({ id }) => {
           if (task.id) {
             createTaskDependencyMutation.mutate({
@@ -196,10 +310,38 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
             })
           }
         })
+
+        // Handle subtasks
+        const parentId = task.id
+        
+        // Create new subtasks (those with null nodeId)
+        content.subtasks
+          .filter(subtask => subtask.nodeId === null)
+          .forEach((subtask, index) => {
+            createSubtaskMutation.mutate({
+              title: subtask.title,
+              parentId,
+              position: index
+            })
+          })
+
+        // Update existing subtasks' positions
+        content.subtasks
+          .filter(subtask => subtask.nodeId !== null)
+          .forEach((subtask, index) => {
+            if (subtask.nodeId) {
+              updateTaskMutation.mutate({
+                id: subtask.nodeId,
+                updates: { position: index }
+              })
+            }
+          })
+
+        onCancel()
       } else {
         createTaskMutation.mutate({
-          title: title.trim(),
-          description: descriptionLines.join('\n').trim() || null,
+          title: content.title.trim(),
+          description: content.description.join('\n').trim() || null,
           completed: false,
           parent_id: task.parent_id || null,
           position: tasks.filter(t => t.parent_id === task.parent_id).length,
@@ -207,8 +349,7 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
           manual_type: false
         }, {
           onSuccess: (newTask) => {
-            // Create task dependencies for each mention
-            mentions.forEach(({ id }) => {
+            content.mentions.forEach(({ id }) => {
               createTaskDependencyMutation.mutate({
                 blockingTaskId: id,
                 blockedTaskId: newTask.id
@@ -282,7 +423,7 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
   }
 
   const handleDeleteMention = (taskToDelete: { id: string; title: string; completed: boolean }) => {
-    setMentions(prev => prev.filter(t => t.id !== taskToDelete.id))
+    // setMentions(prev => prev.filter(t => t.id !== taskToDelete.id))
     
     // Find the index of the mention node to delete
     const mentionIndex = editor.children.findIndex(
@@ -314,6 +455,13 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
             </button>
             {children}
           </span>
+        )
+      case 'subtask':
+        return (
+          <div {...attributes} contentEditable={false}>
+            <SubtaskPill task={element.task} onDelete={handleDeleteSubtask} />
+            {children}
+          </div>
         )
       default:
         return <p {...attributes}>{children}</p>
@@ -365,6 +513,13 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
           Cancel
         </button>
       </div>
+      {taskToDelete && (
+        <TaskDeleteModal
+          task={taskToDelete}
+          onClose={() => setTaskToDelete(null)}
+          tasks={tasks}
+        />
+      )}
     </div>
   )
 } 
