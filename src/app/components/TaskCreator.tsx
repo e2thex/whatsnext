@@ -5,7 +5,7 @@ import { Database } from '@/lib/supabase/client'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createTask } from '../services/tasks'
 import { PlusIcon } from '@heroicons/react/24/outline'
-import { TaskEditor } from './TaskEditor'
+import { SlateTaskEditor } from './SlateTaskEditor'
 import { useFilter } from '../contexts/FilterContext'
 import { useQuery } from '@tanstack/react-query'
 import { getTasks } from '../services/tasks'
@@ -31,15 +31,25 @@ export const TaskCreator = () => {
   })
 
   if (isCreatingTask) {
+    // Calculate position based on context
+    const position = (() => {
+      // If focused on an item, add as a child of that item
+      if (filter.focusedItemId) {
+        return tasks.filter(t => t.parent_id === filter.focusedItemId).length
+      }
+      // Otherwise, add as a top-level task
+      return tasks.filter(t => !t.parent_id).length
+    })()
+
     return (
       <div className="mt-4 p-4 border rounded-lg">
-        <TaskEditor
+        <SlateTaskEditor
           task={{
             title: '',
             description: null,
             completed: false,
             parent_id: filter.focusedItemId || null,
-            position: 0,
+            position,
             type: 'Task',
             manual_type: false
           }}

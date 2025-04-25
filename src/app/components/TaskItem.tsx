@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createTask, updateTask } from '../services/tasks'
 import { useFilter } from '../contexts/FilterContext'
 import { MagnifyingGlassIcon, PlusIcon, PencilIcon, XMarkIcon } from '@heroicons/react/24/outline'
-import { TaskEditor } from './TaskEditor'
+import { SlateTaskEditor } from './SlateTaskEditor'
 import { TaskBlockingButton } from './TaskBlockingModal'
 import { Task } from '../services/tasks'
 import typeIcons, { typeColors } from './typeIcons'
@@ -149,7 +149,7 @@ export const TaskItem = ({
         </div>
         {isEditing ? (
           <div className="ml-2 flex-1">
-            <TaskEditor
+            <SlateTaskEditor
               task={task}
               onCancel={handleCancel}
               tasks={tasks}
@@ -218,7 +218,19 @@ export const TaskItem = ({
                 <XMarkIcon className="h-6 w-6" />
               </button>
             </div>
-            <AddSubtaskForm task={task} onClose={() => setIsAddingSubtask(false)} tasks={tasks} />
+            <SlateTaskEditor
+              task={{
+                title: '',
+                description: null,
+                completed: false,
+                parent_id: task.id,
+                position: tasks.filter(t => t.parent_id === task.id).length,
+                type: 'Task',
+                manual_type: false
+              }}
+              onCancel={() => setIsAddingSubtask(false)}
+              tasks={tasks}
+            />
           </div>
         </div>
       )}
