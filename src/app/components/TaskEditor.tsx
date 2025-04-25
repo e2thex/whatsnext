@@ -43,7 +43,6 @@ export const TaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
 
     return content
   })
-  const [isPreview, setIsPreview] = useState(false)
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 })
   const [mentionQuery, setMentionQuery] = useState('')
@@ -276,55 +275,31 @@ export const TaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
   return (
     <div className="flex-1 flex flex-col gap-2">
       <div className="flex justify-between items-center">
-        <div className="flex gap-2">
-          <button
-            onClick={() => setIsPreview(false)}
-            className={`px-2 py-1 text-sm rounded ${
-              !isPreview ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => setIsPreview(true)}
-            className={`px-2 py-1 text-sm rounded ${
-              isPreview ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            Preview
-          </button>
-        </div>
         <div className="text-xs text-gray-500">
           Markdown supported
         </div>
       </div>
-      {isPreview ? (
-        <div className="flex-1 rounded border p-2 text-sm markdown-content">
-          {renderMarkdown(editedContent)}
-        </div>
-      ) : (
-        <div className="relative">
-          <textarea
-            ref={textareaRef}
-            value={editedContent}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            onBlur={handleBlur}
-            className="flex-1 rounded border p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none w-full"
-            rows={3}
-            autoFocus
-            placeholder="Title (first line)&#10;Description (subsequent lines)&#10;Markdown supported, type @ to mention tasks"
+      <div className="relative">
+        <textarea
+          ref={textareaRef}
+          value={editedContent}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          className="flex-1 rounded border p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none w-full"
+          rows={3}
+          autoFocus
+          placeholder="Title (first line)&#10;Description (subsequent lines)&#10;Markdown supported, type @ to mention tasks"
+        />
+        {showMentionDropdown && (
+          <MentionDropdown
+            tasks={filteredTasks}
+            onSelect={handleMentionSelect}
+            position={mentionPosition}
+            onClose={() => setShowMentionDropdown(false)}
           />
-          {showMentionDropdown && (
-            <MentionDropdown
-              tasks={filteredTasks}
-              onSelect={handleMentionSelect}
-              position={mentionPosition}
-              onClose={() => setShowMentionDropdown(false)}
-            />
-          )}
-        </div>
-      )}
+        )}
+      </div>
       <div className="flex gap-2">
         <button
           onClick={handleSave}
