@@ -42,11 +42,16 @@ type SubtaskElement = {
   task: Task;
   children: CustomText[];
 }
+type ListItemElement = {
+  type: 'list-item';
+  nodeId: string | null;
+  children: CustomText[];
+}
 
 declare module 'slate' {
   interface CustomTypes {
     Editor: BaseEditor & ReactEditor & HistoryEditor
-    Element: CustomElement | MentionElement | SubtaskElement
+    Element: CustomElement | MentionElement | SubtaskElement | ListItemElement
     Text: CustomText
   }
 }
@@ -57,6 +62,55 @@ const initialValue: Descendant[] = [
     children: [{ text: '' }],
   },
 ]
+
+// Add the withLists plugin
+const withLists = (editor: BaseEditor & ReactEditor & HistoryEditor) => {
+  const { insertText, deleteBackward } = editor
+
+  editor.insertText = (text) => {
+    if (text === ' ' && editor.selection) {
+      const { selection } = editor
+      const [start] = Range.edges(selection)
+      const before = Editor.before(editor, start, { unit: 'line' })
+      const beforeRange = before && Editor.range(editor, before, start)
+      const beforeText = beforeRange && Editor.string(editor, beforeRange)
+
+      if (beforeText === '-') {
+        Transforms.delete(editor, { at: beforeRange })
+        Transforms.setNodes(editor, { type: 'list-item' }, { at: start })
+        return
+      }
+    }
+    insertText(text)
+  }
+
+  editor.deleteBackward = (unit) => {
+    if (unit === 'character') {
+      const { selection } = editor
+      if (selection) {
+        const [start] = Range.edges(selection)
+        const node = Editor.above(editor, {
+          at: start,
+          match: n => {
+            const element = n as CustomElement | MentionElement | SubtaskElement | ListItemElement
+            return 'type' in element && element.type === 'list-item'
+          }
+        })
+
+        if (node) {
+          const [listItem, path] = node
+          if (Editor.string(editor, path) === '') {
+            Transforms.setNodes(editor, { type: 'paragraph' }, { at: path })
+            return
+          }
+        }
+      }
+    }
+    deleteBackward(unit)
+  }
+
+  return editor
+}
 
 export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
   const queryClient = useQueryClient()
@@ -69,14 +123,14 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
   const [subtasksToDelete, setSubtasksToDelete] = useState<Task[]>([])
 
   // Create a Slate editor object that won't change across renders
-  const editor = useMemo(() => withHistory(withReact(createEditor())), [])
+  const editor = useMemo(() => withLists(withHistory(withReact(createEditor()))), [])
 
   // Initialize the editor with the task's content
   useEffect(() => {
     console.log('Initializing editor with task:', task)
     console.log('Task subtasks:', task.subtasks)
     
-    const initialContent: (CustomElement | MentionElement | SubtaskElement)[] = []
+    const initialContent: (CustomElement | MentionElement | SubtaskElement | ListItemElement)[] = []
     
     // Add title
     initialContent.push({
@@ -96,9 +150,9 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
     tasks.filter(t => t.parent_id === task.id).forEach((subtask) => {
       console.log('Adding subtask to editor:', subtask)
       initialContent.push({
-        type: 'subtask',
-        task: subtask,
-        children: [{ text: '' }],
+        type: 'list-item',
+        nodeId: subtask.id,
+        children: [{ text: subtask.title }],
       })
     })
 
@@ -232,12 +286,13 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
             } else {
               return { type: 'description' as const, content: text }
             }
-          case 'subtask':
+          case 'list-item':
+            console.log('List item:', node)
             return { 
               type: 'subtask' as const, 
               content: {
-                title: node.task.title,
-                nodeId: node.task.id
+                title: node.children[0].text,
+                nodeId: node.nodeId
               }
             }
           case 'mention':
@@ -248,7 +303,8 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
       }
       return { type: 'unknown' as const, content: node }
     })
-
+    console.log('Editor children:', editor.children)
+    console.log('Processed nodes:', processedNodes)
     // Then reduce into separate arrays for each type
     const content = processedNodes.reduce((acc, node) => {
       switch (node.type) {
@@ -390,6 +446,36 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
           setMentionQuery('')
         }
       }
+    } else if (event.key === 'Enter') {
+      event.preventDefault()
+      const { selection } = editor
+      if (selection) {
+        const [start] = Range.edges(selection)
+        const node = Editor.above(editor, {
+          at: start,
+          match: n => {
+            const element = n as CustomElement | MentionElement | SubtaskElement | ListItemElement
+            return 'type' in element && element.type === 'list-item'
+          }
+        })
+        if (node) {
+          const [listItem, path] = node
+          const newPath = [...path.slice(0, -1), path[path.length - 1] + 1]
+          Transforms.insertNodes(editor, {
+            type: 'list-item',
+            nodeId: null,
+            children: [{ text: '' }]
+          }, { at: newPath })
+          // Move cursor to the new list item
+          Transforms.select(editor, {
+            anchor: { path: newPath, offset: 0 },
+            focus: { path: newPath, offset: 0 }
+          })
+          return
+        }
+      }
+      // Default behavior for Enter
+      Transforms.insertText(editor, '\n')
     }
   }
 
@@ -462,6 +548,16 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
             <SubtaskPill task={element.task} onDelete={handleDeleteSubtask} />
             {children}
           </div>
+        )
+      case 'list-item':
+        return (
+          <li 
+            {...attributes} 
+            className="list-disc ml-4"
+            data-id={element.id}
+          >
+            {children}
+          </li>
         )
       default:
         return <p {...attributes}>{children}</p>
