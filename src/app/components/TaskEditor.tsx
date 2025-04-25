@@ -255,9 +255,8 @@ export const TaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
         const currentLine = lines[lines.length - 1]
         
         // Calculate the position relative to the textarea
-        const left = rect.left + (currentLine.length * 8) // Approximate character width
-        const top = rect.top + (lines.length * lineHeight)
-        
+        const left = currentLine.length * 8
+        const top = lines.length * lineHeight
         setMentionPosition({ top, left })
         setMentionQuery(query)
         setShowMentionDropdown(true)
@@ -295,7 +294,7 @@ export const TaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
           <MentionDropdown
             tasks={filteredTasks}
             onSelect={handleMentionSelect}
-            position={mentionPosition}
+             position={mentionPosition}
             onClose={() => setShowMentionDropdown(false)}
           />
         )}
