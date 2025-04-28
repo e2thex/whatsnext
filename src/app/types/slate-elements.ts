@@ -43,12 +43,27 @@ export type ListItemElement = BaseElement & {
   children: CustomText[]
 }
 
+export interface ParentSelectorElement {
+  type: 'parent-selector'
+  children: [{ text: '' }]
+}
+
+export type ParentMentionElement = BaseElement & {
+  type: 'parent-mention'
+  task: {
+    id: string
+    title: string
+    completed: boolean
+  }
+  children: CustomText[]
+}
+
 export type CustomEditor = BaseEditor & ReactEditor & HistoryEditor
 
 declare module 'slate' {
   interface CustomTypes {
     Editor: CustomEditor
-    Element: CustomElement | MentionElement | BlockedBySelectorElement | SubtaskElement | ListItemElement
+    Element: CustomElement | MentionElement | BlockedBySelectorElement | SubtaskElement | ListItemElement | ParentSelectorElement | ParentMentionElement
     Text: CustomText
   }
 } 

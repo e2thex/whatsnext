@@ -5,14 +5,16 @@ import { withHistory } from 'slate-history'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Task } from '../services/tasks'
 import type { PartialTask } from '../types/slate-processor'
-import type { CustomElement, MentionElement, SubtaskElement, ListItemElement, CustomEditor } from '../types/slate-elements'
+import type { CustomElement, MentionElement, SubtaskElement, ListItemElement, CustomEditor, ParentSelectorElement } from '../types/slate-elements'
 import { useCoreProcesses } from '../hooks/useCoreProcesses'
 import { useBlockedByProcesses } from '../hooks/useBlockedByProcesses'
 import { useSubtaskProcesses } from '../hooks/useSubtaskProcesses'
+import { useParentProcesses } from '../hooks/useParentProcesses'
 import { SubtaskPill } from './SubtaskPill'
 import { TaskDeleteModal } from './TaskDeleteModal'
 import toast from 'react-hot-toast'
 import { BlockedBySelector } from './BlockedBySelector'
+import { ParentSelector } from './ParentSelector'
 
 interface TaskEditorProps {
   task: PartialTask
@@ -115,6 +117,7 @@ const withLists = (editor: CustomEditor) => {
 
 export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
   const [showBlockedBySelector, setShowBlockedBySelector] = useState(false)
+  const [showParentSelector, setShowParentSelector] = useState(false)
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null)
 
   const filteredTasks = tasks.filter(t => 
@@ -129,17 +132,19 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
   const coreProcess = useCoreProcesses()
   const blockedByProcess = useBlockedByProcesses()
   const subtaskProcess = useSubtaskProcesses()
+  const parentProcess = useParentProcesses()
 
   // Initialize editor
   useEffect(() => {
     const initialContent = [
       ...coreProcess.initialize(task, tasks)([]),
+      ...subtaskProcess.initialize(task, tasks)([]),
       ...blockedByProcess.initialize(task, tasks)([]),
-      ...subtaskProcess.initialize(task, tasks)([])
+      ...parentProcess.initialize(task, tasks)([])
     ]
     editor.children = initialContent
     editor.onChange()
-  }, [editor, task, tasks, coreProcess, blockedByProcess, subtaskProcess])
+  }, [editor, task, tasks, coreProcess, blockedByProcess, subtaskProcess, parentProcess])
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'Enter' && event.shiftKey) {
@@ -151,6 +156,7 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
     const coreResult = coreProcess.handleKeyDown(editor, tasks)(event)
     const blockedByResult = blockedByProcess.handleKeyDown(editor, tasks)(event)
     const subtaskResult = subtaskProcess.handleKeyDown(editor, tasks)(event)
+    const parentResult = parentProcess.handleKeyDown(editor, tasks)(event)
   }
 
   const handleSave = async () => {
@@ -158,6 +164,7 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
       await coreProcess.processAndSave(editor, task, tasks)()
       await blockedByProcess.processAndSave(editor, task, tasks)()
       await subtaskProcess.processAndSave(editor, task, tasks)()
+      await parentProcess.processAndSave(editor, task, tasks)()
       toast.success('Task saved successfully')
       onCancel()
     } catch (error) {
@@ -192,6 +199,29 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
             {children}
           </span>
         )
+      case 'parent-mention':
+        return (
+          <span
+            {...attributes}
+            contentEditable={false}
+            className="inline-flex items-center bg-blue-100 text-blue-800 rounded-full px-2 py-0.5 text-sm font-medium mr-1"
+          >
+            ^{element.task.title}
+            <button
+              onClick={() => {
+                const handleDelete = parentProcess.handleDelete?.(editor)
+                if (handleDelete) {
+                  handleDelete(element.task)
+                }
+              }}
+              className="ml-1 text-blue-600 hover:text-blue-800"
+              type="button"
+            >
+              ×
+            </button>
+            {children}
+          </span>
+        )
       case 'blocked-by-selector':
         return (
           <BlockedBySelector
@@ -201,6 +231,21 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
             tasks={filteredTasks}
             onSelect={(task) => {
               const handleSelect = blockedByProcess.handleSelect?.(editor)
+              if (handleSelect) {
+                handleSelect(task)
+              }
+            }}
+          />
+        )
+      case 'parent-selector':
+        return (
+          <ParentSelector
+            element={element}
+            attributes={attributes}
+            children={children}
+            tasks={filteredTasks}
+            onSelect={(task: Task) => {
+              const handleSelect = parentProcess.handleSelect?.(editor)
               if (handleSelect) {
                 handleSelect(task)
               }
@@ -235,13 +280,13 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
       default:
         return <p {...attributes}>{children}</p>
     }
-  }, [editor, blockedByProcess, subtaskProcess, filteredTasks])
+  }, [editor, blockedByProcess, subtaskProcess, parentProcess, filteredTasks])
 
   return (
     <div className="flex-1 flex flex-col gap-2">
       <div className="flex justify-between items-center">
         <div className="text-xs text-gray-500">
-          Markdown supported
+          Markdown supported. Type @ to mention tasks, ^ to set parent
         </div>
       </div>
       <div className="relative">
@@ -250,7 +295,7 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
             onKeyDown={handleKeyDown}
             renderElement={renderElement}
             className="flex-1 rounded border p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none w-full min-h-[100px]"
-            placeholder="Title (first line)&#10;Description (subsequent lines)&#10;Type @ to mention tasks"
+            placeholder="Title (first line)&#10;Description (subsequent lines)&#10;Type @ to mention tasks, ^ to set parent"
           />
         </Slate>
       </div>
