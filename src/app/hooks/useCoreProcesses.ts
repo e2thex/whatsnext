@@ -48,8 +48,9 @@ export const useCoreProcesses = (): SlateProcessor => {
           title: processedData.title.trim(),
           description: processedData.description.join('\n').trim() || null
         });
+        return task.id;
       } else {
-        await createTask({
+        const newTask = await createTask({
           title: processedData.title.trim(),
           description: processedData.description.join('\n').trim() || null,
           completed: false,
@@ -58,9 +59,10 @@ export const useCoreProcesses = (): SlateProcessor => {
           type: 'Task',
           manual_type: false
         });
+        return newTask.id;
       }
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
     }
+    return task.id;
   };
 
   return {

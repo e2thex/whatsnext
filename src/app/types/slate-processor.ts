@@ -14,7 +14,7 @@ export type PartialTask = Partial<Task> & {
 export type SlateProcessor = {
   initialize: (task: PartialTask, tasks: Task[]) => (initialContent: Descendant[]) => Descendant[];
   handleKeyDown: (editor: Editor, tasks: Task[]) => (event: React.KeyboardEvent) => { showSelector: boolean; position?: { top: number; left: number } };
-  processAndSave: (editor: Editor, task: PartialTask, tasks: Task[]) => () => Promise<void>;
+  processAndSave: (editor: Editor, task: PartialTask, tasks: Task[]) => () => Promise<string | undefined>;
   handleDelete?: (editor: Editor) => (taskToDelete: Task) => void;
   handleSelect?: (editor: Editor) => (selectedTask: Task) => void;
 } 

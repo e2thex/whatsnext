@@ -161,17 +161,24 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
 
   const handleSave = async () => {
     try {
-      await coreProcess.processAndSave(editor, task, tasks)()
-      await blockedByProcess.processAndSave(editor, task, tasks)()
-      await subtaskProcess.processAndSave(editor, task, tasks)()
-      await parentProcess.processAndSave(editor, task, tasks)()
-      toast.success('Task saved successfully')
-      onCancel()
+      // Get the parent task ID from core process
+      const parentTaskId = await coreProcess.processAndSave(editor, task, tasks)();
+      
+      // Update the task object with the new ID
+      const updatedTask = { ...task, id: parentTaskId };
+      
+      // Process other relationships with the updated task
+      await blockedByProcess.processAndSave(editor, updatedTask, tasks)();
+      await subtaskProcess.processAndSave(editor, updatedTask, tasks)();
+      await parentProcess.processAndSave(editor, updatedTask, tasks)();
+      
+      toast.success('Task saved successfully');
+      onCancel();
     } catch (error) {
-      toast.error('Failed to save task')
-      console.error('Error saving task:', error)
+      toast.error('Failed to save task');
+      console.error('Error saving task:', error);
     }
-  }
+  };
 
   const renderElement = useCallback((props: any) => {
     const { attributes, children, element } = props
