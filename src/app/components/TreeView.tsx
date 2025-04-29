@@ -167,6 +167,29 @@ export const TreeView = ({ tasks }: TreeViewProps) => {
     return hierarchy
   })() : []
 
+  // Filter tasks to show only focused item and its descendants
+  const filteredTasks = filter.focusedItemId ? (() => {
+    const getDescendants = (itemId: string): Task[] => {
+      const descendants: Task[] = []
+      const queue = [itemId]
+      while (queue.length > 0) {
+        const currentId = queue.shift()!
+        const children = tasks.filter(t => t.parent_id === currentId)
+        descendants.push(...children)
+        queue.push(...children.map(c => c.id))
+      }
+      return descendants
+    }
+
+    const descendants = getDescendants(filter.focusedItemId)
+    return [focusedItem!, ...descendants]
+  })() : tasks
+
+  // Get the root tasks to display
+  const rootTasks = filter.focusedItemId 
+    ? [focusedItem!]  // If focused, show only the focused item as root
+    : filteredTasks.filter((task) => !task.parent_id)  // Otherwise show all top-level tasks
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="w-full">
@@ -197,16 +220,14 @@ export const TreeView = ({ tasks }: TreeViewProps) => {
           </div>
         )}
 
-        {tasks
-          .filter((task) => !task.parent_id)
-          .map((task) => (
-            <TreeNode 
-              key={task.id}
-              task={task}
-              tasks={tasks}
-              onMoveTask={handleMoveTask}
-            />
-          ))}
+        {rootTasks.map((task) => (
+          <TreeNode 
+            key={task.id}
+            task={task}
+            tasks={filteredTasks}
+            onMoveTask={handleMoveTask}
+          />
+        ))}
       </div>
     </DndProvider>
   )
