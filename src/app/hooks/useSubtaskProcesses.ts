@@ -1,5 +1,4 @@
 import { Editor, Descendant, Transforms, Range } from 'slate'
-import { useQueryClient, useMutation } from '@tanstack/react-query'
 import { updateTask, createTask, deleteTask } from '../services/tasks'
 import type { Task } from '../services/tasks'
 import type { SlateProcessor } from '../types/slate-processor'

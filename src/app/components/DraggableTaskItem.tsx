@@ -80,7 +80,7 @@ export const DraggableTaskItem = ({
     }),
   })
 
-  const [{ isOverChild }, dropChild] = useDrop({
+  const [, dropChild] = useDrop({
     accept: 'task',
     drop: (item: DragItem) => {
       if (item.id === task.id) return
