@@ -15,6 +15,7 @@ import toast from 'react-hot-toast'
 import { BlockedBySelector } from './BlockedBySelector'
 import { ParentSelector } from './ParentSelector'
 import { pipe } from '../utils/functional'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface TaskEditorProps {
   task: PartialTask
@@ -32,6 +33,7 @@ const initialValue: Descendant[] = [
 // Add the withLists plugin
 const withLists = (editor: CustomEditor) => {
   const { insertText, deleteBackward, insertBreak } = editor
+
 
   editor.insertText = (text) => {
     if (text === ' ' && editor.selection) {
@@ -117,6 +119,7 @@ const withLists = (editor: CustomEditor) => {
 
 export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null)
+  const queryClient = useQueryClient();
 
   const filteredTasks = tasks.filter(t => 
     t.id !== task.id && 
@@ -165,6 +168,7 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
       await blockedByProcess.processAndSave(editor, updatedTask, tasks)();
       await subtaskProcess.processAndSave(editor, updatedTask, tasks)();
       await parentProcess.processAndSave(editor, updatedTask, tasks)();
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
       
       toast.success('Task saved successfully');
       onCancel();
