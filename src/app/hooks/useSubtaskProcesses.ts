@@ -13,28 +13,6 @@ type ListItemNode = {
 }
 
 export const useSubtaskProcesses = (): SlateProcessor => {
-  const queryClient = useQueryClient();
-
-  const updateTaskMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Task> }) => updateTask(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-    }
-  });
-
-  const createTaskMutation = useMutation({
-    mutationFn: createTask,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-    },
-  })
-
-  const deleteTaskMutation = useMutation({
-    mutationFn: deleteTask,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-    },
-  })
 
   const initialize = (task: PartialTask, tasks: Task[]) => (initialContent: Descendant[]) => {
     return [
@@ -123,12 +101,9 @@ export const useSubtaskProcesses = (): SlateProcessor => {
     if (task.id) {
       for (const subtask of subtasks) {
         if (subtask.nodeId) {
-          await updateTaskMutation.mutateAsync({
-            id: subtask.nodeId,
-            data: { position: subtask.position, title: subtask.title }
-          });
+          await updateTask(subtask.nodeId, { position: subtask.position, title: subtask.title });
         } else {
-          await createTaskMutation.mutateAsync({
+          await createTask({
             title: subtask.title,
             parent_id: task.id,
             position: subtask.position,
@@ -141,7 +116,7 @@ export const useSubtaskProcesses = (): SlateProcessor => {
     // TODO we need to no just delete the subtask but get conferemation for deleting each one before we delete it 
     const subtaskToDelete = tasks.filter(t => t.parent_id === task.id && !subtasks.some(st => st.nodeId === t.id))
     for (const subtask of subtaskToDelete) {
-      await deleteTaskMutation.mutateAsync(subtask.id)
+      await deleteTask(subtask.id)
     }
   };
 

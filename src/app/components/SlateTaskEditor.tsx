@@ -15,7 +15,7 @@ import toast from 'react-hot-toast'
 import { BlockedBySelector } from './BlockedBySelector'
 import { ParentSelector } from './ParentSelector'
 import { pipe } from '../utils/functional'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useMutation } from '@tanstack/react-query'
 
 interface TaskEditorProps {
   task: PartialTask
@@ -121,11 +121,6 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null)
   const queryClient = useQueryClient();
 
-  const filteredTasks = tasks.filter(t => 
-    t.id !== task.id && 
-    !task.blockedBy?.some(m => m.id === t.id)
-  )
-
   // Create a Slate editor object that won't change across renders
   const editor = useMemo(() => withLists(withHistory(withReact(createEditor()))), [])
 
@@ -134,6 +129,35 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
   const blockedByProcess = useBlockedByProcesses()
   const subtaskProcess = useSubtaskProcesses()
   const parentProcess = useParentProcesses()
+
+  const saveTaskMutation = useMutation({
+    mutationFn: async ({ editor, task, tasks }: { editor: Editor; task: PartialTask; tasks: Task[] }) => {
+      // Get the parent task ID from core process
+      const parentTaskId = await coreProcess.processAndSave(editor, task, tasks)();
+      
+      // Update the task object with the new ID
+      const updatedTask = { ...task, id: parentTaskId };
+      
+      // Process other relationships with the updated task
+      await blockedByProcess.processAndSave(editor, updatedTask, tasks)();
+      await subtaskProcess.processAndSave(editor, updatedTask, tasks)();
+      await parentProcess.processAndSave(editor, updatedTask, tasks)();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success('Task saved successfully');
+      onCancel();
+    },
+    onError: (error) => {
+      toast.error('Failed to save task');
+      console.error('Error saving task:', error);
+    }
+  });
+
+  const filteredTasks = tasks.filter(t => 
+    t.id !== task.id && 
+    !task.blockedBy?.some(m => m.id === t.id)
+  )
 
   // Initialize editor
   useEffect(() => {
@@ -156,26 +180,8 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
     
   }
 
-  const handleSave = async () => {
-    try {
-      // Get the parent task ID from core process
-      const parentTaskId = await coreProcess.processAndSave(editor, task, tasks)();
-      
-      // Update the task object with the new ID
-      const updatedTask = { ...task, id: parentTaskId };
-      
-      // Process other relationships with the updated task
-      await blockedByProcess.processAndSave(editor, updatedTask, tasks)();
-      await subtaskProcess.processAndSave(editor, updatedTask, tasks)();
-      await parentProcess.processAndSave(editor, updatedTask, tasks)();
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      
-      toast.success('Task saved successfully');
-      onCancel();
-    } catch (error) {
-      toast.error('Failed to save task');
-      console.error('Error saving task:', error);
-    }
+  const handleSave = () => {
+    saveTaskMutation.mutate({ editor, task, tasks });
   };
 
   const renderElement = useCallback((props: {
