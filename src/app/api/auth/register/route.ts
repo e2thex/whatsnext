@@ -50,11 +50,16 @@ export async function POST(request: Request) {
       )
     }
 
-    // Get the host from the request headers
-    const host = request.headers.get('host') || ''
-    const protocol = host.includes('localhost') ? 'http' : 'https'
-    const siteUrl = `${protocol}://${host}`
-    console.log('Generated site URL:', siteUrl)
+    // Get the site URL from environment variable
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ''
+    if (!siteUrl) {
+      console.error('Missing NEXT_PUBLIC_SITE_URL environment variable')
+      return NextResponse.json(
+        { message: 'Server configuration error: Missing site URL' },
+        { status: 500 }
+      )
+    }
+    console.log('Using site URL:', siteUrl)
     
     // Create a client with the anon key for auth operations
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL

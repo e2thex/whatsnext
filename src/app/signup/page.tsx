@@ -60,7 +60,10 @@ export default function SignUpPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/signup-success`
+        }),
       })
 
       if (!response.ok) {
