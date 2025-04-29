@@ -1,16 +1,16 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, ReactNode, HTMLAttributes } from 'react'
 import { Task } from '../services/tasks'
 import type { BlockedBySelectorElement } from '../types/slate-elements'
 
 interface BlockedBySelectorProps {
   element: BlockedBySelectorElement
-  attributes: any
-  children: any
+  attributes: HTMLAttributes<HTMLDivElement>
+  children: ReactNode
   tasks: Task[]
   onSelect: (task: Task) => void
 }
 
-export const BlockedBySelector = ({ element, attributes, children, tasks, onSelect }: BlockedBySelectorProps) => {
+export const BlockedBySelector = ({ attributes, children, tasks, onSelect }: BlockedBySelectorProps) => {
   const [showDropdown, setShowDropdown] = useState(true)
   const [filteredTasks, setFilteredTasks] = useState(tasks)
   const [selectedIndex, setSelectedIndex] = useState(0)

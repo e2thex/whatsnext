@@ -2,10 +2,9 @@ import { useState, useCallback, useMemo, useEffect } from 'react'
 import { createEditor, Descendant, Editor, Transforms, Range, Path } from 'slate'
 import { Slate, Editable, withReact } from 'slate-react'
 import { withHistory } from 'slate-history'
-import { useQueryClient } from '@tanstack/react-query'
 import type { Task } from '../services/tasks'
 import type { PartialTask } from '../types/slate-processor'
-import type { CustomElement, MentionElement, SubtaskElement, ListItemElement, CustomEditor, ParentSelectorElement } from '../types/slate-elements'
+import type { CustomElement, MentionElement, SubtaskElement, ListItemElement, CustomEditor, ParentMentionElement, BlockedBySelectorElement, ParentSelectorElement } from '../types/slate-elements'
 import { useCoreProcesses } from '../hooks/useCoreProcesses'
 import { useBlockedByProcesses } from '../hooks/useBlockedByProcesses'
 import { useSubtaskProcesses } from '../hooks/useSubtaskProcesses'
@@ -15,6 +14,7 @@ import { TaskDeleteModal } from './TaskDeleteModal'
 import toast from 'react-hot-toast'
 import { BlockedBySelector } from './BlockedBySelector'
 import { ParentSelector } from './ParentSelector'
+import { pipe } from '../utils/functional'
 
 interface TaskEditorProps {
   task: PartialTask
@@ -63,7 +63,7 @@ const withLists = (editor: CustomEditor) => {
       })
 
       if (node) {
-        const [listItem, path] = node
+        const [, path] = node
         // If the list item is empty, convert it to a paragraph
         if (Editor.string(editor, path) === '') {
           Transforms.setNodes(editor, { type: 'paragraph' }, { at: path })
@@ -101,7 +101,7 @@ const withLists = (editor: CustomEditor) => {
         })
 
         if (node) {
-          const [listItem, path] = node
+          const [, path] = node
           if (Editor.string(editor, path) === '') {
             Transforms.setNodes(editor, { type: 'paragraph' }, { at: path })
             return
@@ -116,8 +116,6 @@ const withLists = (editor: CustomEditor) => {
 }
 
 export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
-  const [showBlockedBySelector, setShowBlockedBySelector] = useState(false)
-  const [showParentSelector, setShowParentSelector] = useState(false)
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null)
 
   const filteredTasks = tasks.filter(t => 
@@ -136,12 +134,12 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
 
   // Initialize editor
   useEffect(() => {
-    const initialContent = [
-      ...coreProcess.initialize(task, tasks)([]),
-      ...subtaskProcess.initialize(task, tasks)([]),
-      ...blockedByProcess.initialize(task, tasks)([]),
-      ...parentProcess.initialize(task, tasks)([])
-    ]
+    const initialContent = pipe(
+      coreProcess.initialize(task, tasks),
+      subtaskProcess.initialize(task, tasks),
+      blockedByProcess.initialize(task, tasks),
+      parentProcess.initialize(task, tasks)
+    )([]);
     editor.children = initialContent
     editor.onChange()
   }, [editor, task, tasks, coreProcess, blockedByProcess, subtaskProcess, parentProcess])
@@ -153,10 +151,6 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
       return
     }
     
-    const coreResult = coreProcess.handleKeyDown(editor, tasks)(event)
-    const blockedByResult = blockedByProcess.handleKeyDown(editor, tasks)(event)
-    const subtaskResult = subtaskProcess.handleKeyDown(editor, tasks)(event)
-    const parentResult = parentProcess.handleKeyDown(editor, tasks)(event)
   }
 
   const handleSave = async () => {
@@ -180,7 +174,11 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
     }
   };
 
-  const renderElement = useCallback((props: any) => {
+  const renderElement = useCallback((props: {
+    attributes: React.HTMLAttributes<HTMLElement>;
+    children: React.ReactNode;
+    element: CustomElement | MentionElement | SubtaskElement | ListItemElement | ParentMentionElement | BlockedBySelectorElement | ParentSelectorElement;
+  }) => {
     const { attributes, children, element } = props
     switch (element.type) {
       case 'mention':
@@ -234,7 +232,6 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
           <BlockedBySelector
             element={element}
             attributes={attributes}
-            children={children}
             tasks={filteredTasks}
             onSelect={(task) => {
               const handleSelect = blockedByProcess.handleSelect?.(editor)
@@ -242,14 +239,15 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
                 handleSelect(task)
               }
             }}
-          />
+          >
+            {children}
+          </BlockedBySelector>
         )
       case 'parent-selector':
         return (
           <ParentSelector
             element={element}
             attributes={attributes}
-            children={children}
             tasks={filteredTasks}
             onSelect={(task: Task) => {
               const handleSelect = parentProcess.handleSelect?.(editor)
@@ -257,7 +255,9 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
                 handleSelect(task)
               }
             }}
-          />
+          >
+            {children}
+          </ParentSelector>
         )
       case 'subtask':
         return (

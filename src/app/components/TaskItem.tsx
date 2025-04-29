@@ -2,16 +2,14 @@
 
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createTask, updateTask } from '../services/tasks'
+import { updateTask } from '../services/tasks'
 import { useFilter } from '../contexts/FilterContext'
 import { MagnifyingGlassIcon, PlusIcon, PencilIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { SlateTaskEditor } from './SlateTaskEditor'
 import { TaskBlockingButton } from './TaskBlockingModal'
 import { Task } from '../services/tasks'
 import typeIcons, { typeColors } from './typeIcons'
-import { determineTaskType } from '../utils/taskUtils'
 import BreadcrumbNav from './BreadcrumbNav'
-import { AddSubtaskForm } from './AddSubtaskForm'
 import { TaskDeleteModal } from './TaskDeleteModal'
 
 type TaskType = 'Task' | 'Mission' | 'Objective' | 'Ambition'
@@ -41,18 +39,6 @@ export const TaskItem = ({
       updateTask(id, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
-    },
-  })
-
-  const createSubtaskMutation = useMutation({
-    mutationFn: (title: string) => createTask({
-      title,
-      parent_id: task.id,
-      position: 0, // Will be updated by the backend
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      setIsAddingSubtask(false)
     },
   })
 

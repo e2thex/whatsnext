@@ -1,16 +1,15 @@
 import { Editor, Descendant, Range, Transforms } from 'slate'
-import { useQueryClient } from '@tanstack/react-query'
 import { addBlockingRelationship, removeBlockingRelationship } from '../services/tasks'
 import type { Task } from '../services/tasks'
 import type { SlateProcessor } from '../types/slate-processor'
 import type { PartialTask } from '../types/slate-processor'
-import type { MentionElement, BlockedBySelectorElement } from '../types/slate-elements'
+import type { MentionElement } from '../types/slate-elements'
 
 export const useBlockedByProcesses = (): SlateProcessor => {
-  const queryClient = useQueryClient();
 
-  const initialize = (task: PartialTask, tasks: Task[]) => (initialContent: Descendant[]) => {
+  const initialize = (task: PartialTask) => (initialContent: Descendant[]) => {
     return [
+      ...initialContent,
       ...(task.blockedBy || []).map(mention => ({
         type: 'mention',
         task: mention,
@@ -19,7 +18,7 @@ export const useBlockedByProcesses = (): SlateProcessor => {
     ];
   };
 
-  const handleKeyDown = (editor: Editor, tasks: Task[]) => (event: React.KeyboardEvent) => {
+  const handleKeyDown = (editor: Editor) => (event: React.KeyboardEvent) => {
     if (event.key === '@') {
       event.preventDefault();
       const { selection } = editor;
@@ -48,7 +47,7 @@ export const useBlockedByProcesses = (): SlateProcessor => {
     return { showSelector: false };
   };
 
-  const processAndSave = (editor: Editor, task: PartialTask, tasks: Task[]) => async () => {
+  const processAndSave = (editor: Editor, task: PartialTask) => async () => {
     const mentions = editor.children
       .filter(node => 'type' in node && node.type === 'mention')
       .map(node => (node as MentionElement).task);
@@ -70,6 +69,7 @@ export const useBlockedByProcesses = (): SlateProcessor => {
         await addBlockingRelationship(id, task.id);
       }
     }
+    return undefined;
   };
 
   const handleDelete = (editor: Editor) => (taskToDelete: Task) => {
@@ -92,7 +92,7 @@ export const useBlockedByProcesses = (): SlateProcessor => {
       });
 
       if (node) {
-        const [selector, path] = node;
+        const [, path] = node;
         Transforms.removeNodes(editor, { at: path });
         Transforms.insertNodes(editor, {
           type: 'mention',

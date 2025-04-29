@@ -16,7 +16,6 @@ type DeleteMode = 'delete-all' | 'move-children' | null
 export const TaskDeleteModal = ({ task, onClose, tasks }: TaskDeleteModalProps) => {
   const queryClient = useQueryClient()
   const [isDeleting, setIsDeleting] = useState(false)
-  const [deleteMode, setDeleteMode] = useState<DeleteMode>(null)
 
   const deleteTaskMutation = useMutation({
     mutationFn: async ({ id, mode }: { id: string; mode: DeleteMode }) => {

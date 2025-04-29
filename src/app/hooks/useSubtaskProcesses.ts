@@ -38,6 +38,7 @@ export const useSubtaskProcesses = (): SlateProcessor => {
 
   const initialize = (task: PartialTask, tasks: Task[]) => (initialContent: Descendant[]) => {
     return [
+      ...initialContent,
       ...tasks
         .filter(t => t.parent_id === task.id)
         .map(subtask => ({
@@ -48,7 +49,7 @@ export const useSubtaskProcesses = (): SlateProcessor => {
     ];
   };
 
-  const handleKeyDown = (editor: Editor, tasks: Task[]) => (event: React.KeyboardEvent) => {
+  const handleKeyDown = (editor: Editor) => (event: React.KeyboardEvent) => {
     if (event.key === 'Enter') {
       const { selection } = editor;
       if (selection) {
@@ -135,6 +136,7 @@ export const useSubtaskProcesses = (): SlateProcessor => {
           });
         }
       }
+      return undefined;
     }
     // TODO we need to no just delete the subtask but get conferemation for deleting each one before we delete it 
     const subtaskToDelete = tasks.filter(t => t.parent_id === task.id && !subtasks.some(st => st.nodeId === t.id))

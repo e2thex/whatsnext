@@ -4,7 +4,7 @@ import { updateTask } from '../services/tasks'
 import type { Task } from '../services/tasks'
 import type { SlateProcessor } from '../types/slate-processor'
 import type { PartialTask } from '../types/slate-processor'
-import type { ParentMentionElement, ParentSelectorElement } from '../types/slate-elements'
+import type { ParentMentionElement } from '../types/slate-elements'
 
 export const useParentProcesses = (): SlateProcessor => {
   const queryClient = useQueryClient();
@@ -13,17 +13,20 @@ export const useParentProcesses = (): SlateProcessor => {
     if (task.parent_id) {
       const parent = tasks.find(t => t.id === task.parent_id);
       if (parent) {
-        return [{
-          type: 'parent-mention',
-          task: parent,
-          children: [{ text: '' }],
-        }];
+        return [
+          ...initialContent,
+          {
+            type: 'parent-mention',
+            task: parent,
+            children: [{ text: '' }],
+          }
+        ];
       }
     }
-    return [];
+    return initialContent;
   };
 
-  const handleKeyDown = (editor: Editor, tasks: Task[]) => (event: React.KeyboardEvent) => {
+  const handleKeyDown = (editor: Editor) => (event: React.KeyboardEvent) => {
     if (event.key === '^') {
       event.preventDefault();
       const { selection } = editor;
@@ -52,7 +55,7 @@ export const useParentProcesses = (): SlateProcessor => {
     return { showSelector: false };
   };
 
-  const processAndSave = (editor: Editor, task: PartialTask, tasks: Task[]) => async () => {
+  const processAndSave = (editor: Editor, task: PartialTask) => async () => {
     const mentions = editor.children
       .filter(node => 'type' in node && node.type === 'parent-mention')
       .map(node => (node as ParentMentionElement).task);
@@ -68,6 +71,7 @@ export const useParentProcesses = (): SlateProcessor => {
       await updateTask(task.id, { parent_id: null });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
     }
+    return undefined;
   };
 
   const handleDelete = (editor: Editor) => (taskToDelete: Task) => {
@@ -90,7 +94,7 @@ export const useParentProcesses = (): SlateProcessor => {
       });
 
       if (node) {
-        const [selector, path] = node;
+        const [, path] = node;
         Transforms.removeNodes(editor, { at: path });
         Transforms.insertNodes(editor, {
           type: 'parent-mention',

@@ -4,11 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { TreeView } from './TreeView'
 import { ListView } from './ListView'
 import { getTasks } from '../services/tasks'
-import { Database } from '@/lib/supabase/client'
 import { useFilter } from '../contexts/FilterContext'
 import { TaskCreator } from './TaskCreator'
-
-type Task = Database['public']['Tables']['items']['Row']
 
 export const ItemList = () => {
   const { data: tasks = [], isLoading, error } = useQuery({

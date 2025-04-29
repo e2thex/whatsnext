@@ -7,7 +7,6 @@ import {
   QueueListIcon,
   CheckCircleIcon,
   CircleStackIcon,
-  ExclamationCircleIcon,
   ClockIcon,
   ArrowPathIcon,
   MagnifyingGlassIcon,

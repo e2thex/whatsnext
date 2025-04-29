@@ -11,6 +11,7 @@ As a user, I want to delete tasks so that I can remove unwanted or completed ite
 - Users receive feedback when tasks are deleted
 - Users can see which tasks will be affected by deletion (including child tasks)
 - Users can cancel the deletion process
+- if a user is deleting a task that has children they are offered the option to delete the children or to move the children up
 
 ## Implementation Details
 - Delete button/option in task context menu

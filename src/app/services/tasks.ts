@@ -1,10 +1,8 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Database } from '@/lib/supabase/client'
-import { supabase } from '@/lib/supabase/client'
 import { determineTaskType, shouldTaskBeBlockedByDescendants } from '../utils/taskUtils'
 
 type Item = Database['public']['Tables']['items']['Row']
-type TaskDependency = Database['public']['Tables']['task_dependencies']['Row']
 type BaseTask = Database['public']['Tables']['items']['Row']
 type TaskInsert = Database['public']['Tables']['items']['Insert']
 

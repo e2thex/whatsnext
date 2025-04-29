@@ -1,34 +1,22 @@
 'use client'
 
 import { useState } from 'react'
-import { Database } from '@/lib/supabase/client'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createTask } from '../services/tasks'
 import { PlusIcon } from '@heroicons/react/24/outline'
 import { SlateTaskEditor } from './SlateTaskEditor'
 import { useFilter } from '../contexts/FilterContext'
 import { useQuery } from '@tanstack/react-query'
 import { getTasks } from '../services/tasks'
 
-type Task = Database['public']['Tables']['items']['Row']
 
 export const TaskCreator = () => {
   const [isCreatingTask, setIsCreatingTask] = useState(false)
   const { filter } = useFilter()
-  const queryClient = useQueryClient()
 
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks'],
     queryFn: getTasks,
   })
 
-  const createTaskMutation = useMutation({
-    mutationFn: createTask,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      setIsCreatingTask(false)
-    },
-  })
 
   if (isCreatingTask) {
     // Calculate position based on context

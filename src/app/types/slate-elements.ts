@@ -14,11 +14,7 @@ export type CustomElement = BaseElement & {
 
 export type MentionElement = BaseElement & {
   type: 'mention'
-  task: {
-    id: string
-    title: string
-    completed: boolean
-  }
+  task: Task
   children: CustomText[]
 }
 
@@ -29,11 +25,7 @@ export type BlockedBySelectorElement = BaseElement & {
 
 export type SubtaskElement = BaseElement & {
   type: 'subtask'
-  task: {
-    id: string
-    title: string
-    completed: boolean
-  }
+  task: Task
   children: CustomText[]
 }
 
@@ -43,18 +35,14 @@ export type ListItemElement = BaseElement & {
   children: CustomText[]
 }
 
-export interface ParentSelectorElement {
-  type: 'parent-selector'
-  children: [{ text: '' }]
-}
-
 export type ParentMentionElement = BaseElement & {
   type: 'parent-mention'
-  task: {
-    id: string
-    title: string
-    completed: boolean
-  }
+  task: Task
+  children: CustomText[]
+}
+
+export type ParentSelectorElement = BaseElement & {
+  type: 'parent-selector'
   children: CustomText[]
 }
 

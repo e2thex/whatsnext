@@ -11,15 +11,6 @@ export type FilterState = {
   focusedItemId: string | null
 }
 
-const defaultFilterState: FilterState = {
-  viewMode: 'list',
-  completion: 'all',
-  blocking: 'all',
-  type: 'all',
-  search: '',
-  focusedItemId: null
-}
-
 interface FilterContextType {
   filter: FilterState
   updateFilter: (updates: Partial<FilterState>) => void

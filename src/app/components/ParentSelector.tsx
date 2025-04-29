@@ -1,16 +1,16 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, HTMLAttributes, ReactNode } from 'react'
 import { Task } from '../services/tasks'
 import type { ParentSelectorElement } from '../types/slate-elements'
 
 interface ParentSelectorProps {
   element: ParentSelectorElement
-  attributes: any
-  children: any
+  attributes: HTMLAttributes<HTMLDivElement>
+  children: ReactNode
   tasks: Task[]
   onSelect: (task: Task) => void
 }
 
-export const ParentSelector = ({ element, attributes, children, tasks, onSelect }: ParentSelectorProps) => {
+export const ParentSelector = ({ attributes, children, tasks, onSelect }: ParentSelectorProps) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const [position, setPosition] = useState({ top: 0, left: 0 })

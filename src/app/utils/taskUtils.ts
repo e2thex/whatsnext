@@ -3,7 +3,6 @@ import { FilterState } from '../contexts/FilterContext'
 
 export const taskOrDescendantsMatchFilter = (task: Task, tasks: Task[], filter: FilterState): boolean => {
   // Get the effective type (manual or automatic)
-  const effectiveType = task.manual_type && task.type ? task.type : determineTaskType(task, tasks)
 
   // Check if the current task matches the filter
   const currentTaskMatches = !(
@@ -33,7 +32,6 @@ export const taskOrDescendantsMatchFilter = (task: Task, tasks: Task[], filter: 
 
   const descendants = getDescendants(task.id)
   return descendants.some(descendant => {
-    const descendantEffectiveType = descendant.manual_type && descendant.type ? descendant.type : determineTaskType(descendant, tasks)
     return !(
       (filter.completion === 'todo' && descendant.completed) ||
       (filter.completion === 'done' && !descendant.completed) ||

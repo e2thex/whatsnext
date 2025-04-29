@@ -1,5 +1,4 @@
 import { Editor, Descendant } from 'slate'
-import { useQueryClient } from '@tanstack/react-query'
 import { updateTask, createTask } from '../services/tasks'
 import type { Task } from '../services/tasks'
 import type { SlateProcessor } from '../types/slate-processor'
@@ -7,10 +6,10 @@ import type { PartialTask } from '../types/slate-processor'
 import type { CustomText } from '../types/slate-elements'
 
 export const useCoreProcesses = (): SlateProcessor => {
-  const queryClient = useQueryClient();
 
-  const initialize = (task: PartialTask, tasks: Task[]) => (initialContent: Descendant[]) => {
+  const initialize = (task: PartialTask) => (initialContent: Descendant[]) => {
     return [
+      ...initialContent,
       {
         type: 'paragraph',
         children: [{ text: task.title || '' }],
@@ -22,7 +21,7 @@ export const useCoreProcesses = (): SlateProcessor => {
     ];
   };
 
-  const handleKeyDown = (editor: Editor, tasks: Task[]) => (event: React.KeyboardEvent) => {
+  const handleKeyDown = () => () => {
     return { showSelector: false };
   };
 
