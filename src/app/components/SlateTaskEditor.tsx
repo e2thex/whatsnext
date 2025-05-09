@@ -15,7 +15,7 @@ import toast from 'react-hot-toast'
 import { BlockedBySelector } from './BlockedBySelector'
 import { ParentSelector } from './ParentSelector'
 import { pipe } from '../utils/functional'
-import { useQueryClient, useMutation } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface TaskEditorProps {
   task: PartialTask
