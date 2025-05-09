@@ -110,13 +110,14 @@ export const useSubtaskProcesses = (): SlateProcessor => {
           });
         }
       }
-      return undefined;
     }
     // TODO we need to no just delete the subtask but get conferemation for deleting each one before we delete it 
     const subtaskToDelete = tasks.filter(t => t.parent_id === task.id && !subtasks.some(st => st.nodeId === t.id))
+    console.log({subtaskToDelete}, 'subtaskToDelete')
     for (const subtask of subtaskToDelete) {
       await deleteTask(subtask.id)
     }
+    return undefined;
   };
 
   const handleDelete = (editor: Editor) => (taskToDelete: Task) => {

@@ -130,8 +130,9 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
   const subtaskProcess = useSubtaskProcesses()
   const parentProcess = useParentProcesses()
 
-  const saveTaskMutation = useMutation({
-    mutationFn: async ({ editor, task, tasks }: { editor: Editor; task: PartialTask; tasks: Task[] }) => {
+  const handleSave = async () => {
+    // TODO at some point we should probably move this to a mutation but it's not clear how to do that with the Slate editor
+    try {
       // Get the parent task ID from core process
       const parentTaskId = await coreProcess.processAndSave(editor, task, tasks)();
       
@@ -142,17 +143,16 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
       await blockedByProcess.processAndSave(editor, updatedTask, tasks)();
       await subtaskProcess.processAndSave(editor, updatedTask, tasks)();
       await parentProcess.processAndSave(editor, updatedTask, tasks)();
-    },
-    onSuccess: () => {
+
+      // Invalidate queries and show success message
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast.success('Task saved successfully');
       onCancel();
-    },
-    onError: (error) => {
+    } catch (error) {
       toast.error('Failed to save task');
       console.error('Error saving task:', error);
     }
-  });
+  };
 
   const filteredTasks = tasks.filter(t => 
     t.id !== task.id && 
@@ -177,12 +177,13 @@ export const SlateTaskEditor = ({ task, onCancel, tasks }: TaskEditorProps) => {
       handleSave()
       return
     }
-    
-  }
 
-  const handleSave = () => {
-    saveTaskMutation.mutate({ editor, task, tasks });
-  };
+    // Call each process's handleKeyDown
+    blockedByProcess.handleKeyDown(editor, tasks)(event)
+    parentProcess.handleKeyDown(editor, tasks)(event)
+    subtaskProcess.handleKeyDown(editor, tasks)(event)
+    coreProcess.handleKeyDown(editor, tasks)(event)
+  }
 
   const renderElement = useCallback((props: {
     attributes: React.HTMLAttributes<HTMLElement>;
