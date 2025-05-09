@@ -5,13 +5,13 @@ As a user, I want to add a date as a dependency so that a task is blocked until 
 ## Meta Data
 | Section | Value |
 | ------- | ----- |
-| Completed | ✓ |
+| Completed |  |
 | Epic | Task States |
 | Priority | Medium |
 
 ## Acceptance Criteria
 
-1. Users can set a future date and time as a dependency for any task
+1. Users can set a future date and time as a dependency for any task, but the time is optional (will default to 00:00)
 2. Tasks with date dependencies are visually indicated as blocked until the specified date arrives
 3. Date dependencies are shown alongside task dependencies in the dependency interface
 4. Users can easily modify or remove a date dependency
@@ -21,6 +21,7 @@ As a user, I want to add a date as a dependency so that a task is blocked until 
 8. Date dependencies persist across sessions and page refreshes
 9. Date dependencies can coexist with task dependencies (both must be satisfied for a task to be unblocked)
 10. Date dependency status is updated without requiring page refresh
+11. Date dependency are a blocker and work as such for calculating Parent block status
 
 ## Non-Functional Requirements
 
