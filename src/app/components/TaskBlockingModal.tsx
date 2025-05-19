@@ -6,9 +6,11 @@ import {
   addBlockingRelationship,
   removeBlockingRelationship,
   searchTasks,
-  Task
+  Task,
+  addDateDependency,
+  removeDateDependency
 } from '../services/tasks'
-import { XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, MagnifyingGlassIcon, CalendarIcon } from '@heroicons/react/24/outline'
 import { useDebounce } from '../hooks/useDebounce'
 
 type SearchResult = {
@@ -30,6 +32,8 @@ interface TaskBlockingModalProps {
 export const TaskBlockingButton = ({ task, className = '' }: TaskBlockingButtonProps) => {
   const [showBlockingModal, setShowBlockingModal] = useState(false)
 
+  const totalBlockers = task.blockedBy.length + (task.dateDependency ? 1 : 0)
+
   return (
     <>
       <button
@@ -37,9 +41,9 @@ export const TaskBlockingButton = ({ task, className = '' }: TaskBlockingButtonP
         className={`${className} flex items-center justify-center w-6 h-6 rounded-full ${
           task.isBlocked ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
         }`}
-        title={task.isBlocked ? `${task.blockedBy.length} tasks blocking this task` : `${task.blocking.length} tasks blocked by this task`}
+        title={task.isBlocked ? `${totalBlockers} items blocking this task` : `${task.blocking.length} tasks blocked by this task`}
       >
-        {task.isBlocked ? task.blockedBy.length : task.blocking.length}
+        {task.isBlocked ? totalBlockers : task.blocking.length}
       </button>
 
       {showBlockingModal && (
@@ -55,6 +59,27 @@ export const TaskBlockingButton = ({ task, className = '' }: TaskBlockingButtonP
 export const TaskBlockingModal = ({ task, onClose }: TaskBlockingModalProps) => {
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
+  const [date, setDate] = useState<string>(() => {
+    if (task.dateDependency?.unblockAt) {
+      // Convert UTC to local time for display
+      const localDate = new Date(task.dateDependency.unblockAt)
+      const year = localDate.getFullYear()
+      const month = String(localDate.getMonth() + 1).padStart(2, '0')
+      const day = String(localDate.getDate()).padStart(2, '0')
+      const hours = String(localDate.getHours()).padStart(2, '0')
+      const minutes = String(localDate.getMinutes()).padStart(2, '0')
+      return `${year}-${month}-${day}T${hours}:${minutes}`
+    }
+    // Set to tomorrow at 00:00 in local timezone
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    tomorrow.setHours(0, 0, 0, 0)
+    // Format the date in local timezone
+    const year = tomorrow.getFullYear()
+    const month = String(tomorrow.getMonth() + 1).padStart(2, '0')
+    const day = String(tomorrow.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}T00:00`
+  })
   const debouncedSearchQuery = useDebounce(searchQuery, 300)
 
   const { data: searchResults = [] } = useQuery({
@@ -78,12 +103,45 @@ export const TaskBlockingModal = ({ task, onClose }: TaskBlockingModalProps) => 
     },
   })
 
+  const addDateDependencyMutation = useMutation({
+    mutationFn: (unblockAt: string) => addDateDependency(task.id, unblockAt),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    },
+  })
+
+  const removeDateDependencyMutation = useMutation({
+    mutationFn: () => removeDateDependency(task.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      setDate('')
+      onClose()
+    },
+  })
+
   const handleAddBlocking = (blockingTaskId: string) => {
     addBlockingMutation.mutate(blockingTaskId)
   }
 
   const handleRemoveBlocking = (blockingTaskId: string) => {
     removeBlockingMutation.mutate(blockingTaskId)
+  }
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDate(e.target.value)
+  }
+
+  const handleDateSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (date) {
+      const localDate = new Date(Date.parse(date))
+      addDateDependencyMutation.mutate(localDate.toISOString())
+    }
+  }
+
+  const handleRemoveDate = (e: React.MouseEvent) => {
+    e.preventDefault()
+    removeDateDependencyMutation.mutate()
   }
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,6 +155,18 @@ export const TaskBlockingModal = ({ task, onClose }: TaskBlockingModalProps) => 
   const isTaskBlocked = useCallback((taskId: string) => {
     return task.blocking.some(t => t.id === taskId)
   }, [task.blocking])
+
+  const formatDateForDisplay = (date: Date) => {
+    const localDate = new Date(date)
+    return localDate.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    })
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -115,6 +185,42 @@ export const TaskBlockingModal = ({ task, onClose }: TaskBlockingModalProps) => 
         </div>
 
         <div className="mb-6">
+          <h3 className="text-lg font-medium mb-2">Date Dependency</h3>
+          <form onSubmit={handleDateSubmit} className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <input
+                type="datetime-local"
+                value={date}
+                onChange={handleDateChange}
+                min={new Date().toISOString().slice(0, 16)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                type="submit"
+                disabled={!date}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Set
+              </button>
+            </div>
+            {task.dateDependency && (
+              <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                <span className="flex items-center">
+                  <CalendarIcon className="h-5 w-5 text-blue-600 mr-2" />
+                  Unblocks at <span className="ml-1">{formatDateForDisplay(new Date(task.dateDependency.unblockAt))}</span>
+                </span>
+                <button
+                  onClick={handleRemoveDate}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+          </form>
+        </div>
+
+        <div className="mb-6">
           <h3 className="text-lg font-medium mb-2">Tasks Blocking This Task</h3>
           <div className="space-y-2">
             {task.blockedBy.map(task => (
@@ -130,7 +236,7 @@ export const TaskBlockingModal = ({ task, onClose }: TaskBlockingModalProps) => 
                 </button>
               </div>
             ))}
-            {task.blockedBy.length === 0 && (
+            {task.blockedBy.length === 0 && !task.dateDependency && (
               <p className="text-gray-500">No tasks are blocking this task</p>
             )}
           </div>

@@ -19,6 +19,9 @@ export type Task = BaseTask & {
   }[]
   isBlocked: boolean
   effectiveType: 'Task' | 'Mission' | 'Objective' | 'Ambition'
+  dateDependency?: {
+    unblockAt: string
+  }
 }
 
 type TaskDependencyWithDetails = {
@@ -140,15 +143,36 @@ export const getTasksHelper = async (taskIds?: string[]): Promise<Task[]> => {
   const idsToFetch = tasks.map(task => task.id)
   const taskMap = await fetchTaskDependencies(supabase, idsToFetch)
 
+  // Fetch date dependencies
+  const { data: dateDependencies, error: dateDepsError } = await supabase
+    .from('date_dependencies')
+    .select('task_id, unblock_at')
+    .in('task_id', idsToFetch)
+
+  if (dateDepsError) {
+    throw dateDepsError
+  }
+
+  // Create a map of task IDs to their date dependencies
+  const dateDepsMap = new Map<string, { unblockAt: string }>()
+  dateDependencies?.forEach(dep => {
+    dateDepsMap.set(dep.task_id, { unblockAt: dep.unblock_at })
+  })
+
   // First pass: Merge the base task data with the dependency data and determine effective type
   const tasksWithDeps = tasks.map(task => {
     const taskWithDeps = {
       ...task,
-      ...(taskMap.get(task.id) || { blockedBy: [], blocking: [], isBlocked: false })
+      ...(taskMap.get(task.id) || { blockedBy: [], blocking: [], isBlocked: false }),
+      dateDependency: dateDepsMap.get(task.id)
     }
+    
+    // Check if task is blocked by date dependency
+    const isBlockedByDate = taskWithDeps.dateDependency && new Date(taskWithDeps.dateDependency.unblockAt) > new Date()
     
     return {
       ...taskWithDeps,
+      isBlocked: taskWithDeps.isBlocked || isBlockedByDate,
       effectiveType: determineTaskType(taskWithDeps, tasks)
     }
   })
@@ -325,6 +349,16 @@ export const deleteTask = async (id: string): Promise<void> => {
     throw dependencyError
   }
 
+  // Delete any date dependencies for this task
+  const { error: dateDependencyError } = await supabase
+    .from('date_dependencies')
+    .delete()
+    .eq('task_id', id)
+
+  if (dateDependencyError) {
+    throw dateDependencyError
+  }
+
   // Then delete the task itself
   const { error } = await supabase
     .from('items')
@@ -359,4 +393,56 @@ export const moveChildrenUp = async (taskId: string): Promise<void> => {
   if (error) {
     throw error
   }
+}
+
+// Add date dependency functions
+export const addDateDependency = async (taskId: string, unblockAt: string): Promise<void> => {
+  const supabase = createClientComponentClient<Database>()
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) {
+    throw new Error('User must be authenticated to add date dependencies')
+  }
+
+  const { error } = await supabase
+    .from('date_dependencies')
+    .upsert({
+      task_id: taskId,
+      unblock_at: unblockAt,
+      user_id: user.id
+    })
+
+  if (error) {
+    throw error
+  }
+}
+
+export const removeDateDependency = async (taskId: string): Promise<void> => {
+  const supabase = createClientComponentClient<Database>()
+  const { error } = await supabase
+    .from('date_dependencies')
+    .delete()
+    .eq('task_id', taskId)
+
+  if (error) {
+    throw error
+  }
+}
+
+export const getDateDependency = async (taskId: string): Promise<{ unblockAt: string } | null> => {
+  const supabase = createClientComponentClient<Database>()
+  const { data, error } = await supabase
+    .from('date_dependencies')
+    .select('unblock_at')
+    .eq('task_id', taskId)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') { // No rows returned
+      return null
+    }
+    throw error
+  }
+
+  return data ? { unblockAt: data.unblock_at } : null
 } 
