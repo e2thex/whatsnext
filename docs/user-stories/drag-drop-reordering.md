@@ -13,8 +13,17 @@ As a user, I want to be able to drag and drop tasks to reorder them within their
 
 1. Users can drag any task to reposition it within its current parent
 2. Users can drag tasks to place them under a different parent
-3. The UI provides clear visual feedback during drag operations
-4. Drop zones are clearly indicated when dragging an item
+3. The UI provides clear visual feedback during drag operations:
+   - Dragged items show reduced opacity (10%)
+   - Drop zones use a blue highlight with opacity transitions
+   - Drop zones are hidden by default and only appear during drag operations
+4. Drop zones are clearly indicated when dragging an item:
+   - Before drop zones appear above items
+   - After drop zones appear below the last item at each level
+   - Child drop zones cover the entire task item for leaf nodes
+   - Drop zones only appear when an item is being dragged
+   - Child drop zones only appear for tasks without children
+   - After drop zones only appear for the last item at each level
 5. Task hierarchy is preserved when moving items (children move with their parent)
 6. Position changes persist after page refresh
 7. The drag and drop interface works in tree view
