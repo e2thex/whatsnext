@@ -40,4 +40,6 @@ As a user, I want to be able to filter tasks based on their completion status so
 ## Related Components
 
 - `app/components/Toolbar.tsx` - Contains the completion filter UI controls
-- `app/components/ItemList.tsx` - Applies the filters to the task list 
+- `app/components/ItemList.tsx` - Applies the filters to the task list
+- `app/contexts/FilterContext.tsx` - Manages filter state
+- `app/utils/taskUtils.ts` - Contains filtering logic 

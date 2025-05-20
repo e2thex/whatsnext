@@ -27,7 +27,7 @@ As a user, I want to be able to filter tasks based on their blocking status so t
 ## Dependencies
 
 1. Depends on [Tool Bar](tool-bar.md) for UI integration. ✓
-2. Depends on the task dependency system.
+2. Depends on the task dependency system. ✓
 
 ## Implementation Notes
 
@@ -44,4 +44,6 @@ As a user, I want to be able to filter tasks based on their blocking status so t
 
 - `app/components/Toolbar.tsx` - Contains the blocking status filter UI controls
 - `app/components/ItemList.tsx` - Applies the filters to the task list
-- `app/components/Item.tsx` - Displays visual indicators for blocked/actionable status 
+- `app/components/Item.tsx` - Displays visual indicators for blocked/actionable status
+- `app/contexts/FilterContext.tsx` - Manages filter state
+- `app/utils/taskUtils.ts` - Contains filtering logic 

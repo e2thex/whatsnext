@@ -9,12 +9,13 @@ This epic focuses on features that help users organize, view, and interact with 
 | User Story | Status | Dependencies | Description |
 |------------|--------|--------------|-------------|
 | [Tool Bar](tool-bar.md) | Not Completed | None | Provides a centralized UI for controlling task display, including layout, filtering, and search. |
-| [Completion Status Filtering](task-filtering.md) | Not Completed | [Tool Bar](tool-bar.md) | Allows users to filter tasks based on completion status (All/Todo/Done). |
-| [Blocking Status Filtering](blocking-status-filtering.md) | Not Completed | [Tool Bar](tool-bar.md) | Allows users to filter tasks based on blocking status (Any/Actionable/Blocked). |
+| [Completion Status Filtering](task-filtering.md) | Completed | [Tool Bar](tool-bar.md) | Allows users to filter tasks based on completion status (All/Todo/Done). |
+| [Blocking Status Filtering](blocking-status-filtering.md) | Completed | [Tool Bar](tool-bar.md) | Allows users to filter tasks based on blocking status (Any/Actionable/Blocked). |
 | [Layout Switching](layout-switching.md) | Not Completed | [Tool Bar](tool-bar.md) | Enables users to switch between Tree and List views of tasks. |
 | [Task Search](task-search.md) | Not Completed | [Tool Bar](tool-bar.md) | Provides functionality to search for tasks by keywords. |
 | [Type Filtering](type-filtering.md) | Not Completed | [Tool Bar](tool-bar.md) | Allows users to filter tasks based on their type. |
 | [List View](list-view.md) | Not Completed | [Layout Switching](layout-switching.md) | Provides a flat list view of tasks with sorting and filtering capabilities. |
+| [Tree View](tree-view.md) | Not Completed | [Layout Switching](layout-switching.md) | Provides a hierarchical view of tasks with parent-child relationships. |
 | [Drag & Drop Reordering](drag-drop-reordering.md) | Not Completed | None | Enables users to reorder tasks through intuitive drag and drop interactions. |
 
 ## Task Management Epic
@@ -29,6 +30,11 @@ This epic focuses on core task management features.
 | [Task Progress](task-progress.md) | Not Completed | None | Provides visual indicators of task completion progress. |
 | [Task Questions](task-questions.md) | Not Completed | None | Enables users to add questions and answers to tasks. |
 | [Date Dependencies](date-dependencies.md) | Not Completed | [Task Dependencies](task-dependencies.md) | Allows users to create dependencies based on dates. |
+| [Task Creation](task-creation.md) | Not Completed | None | Enables users to create new tasks with various properties. |
+| [Task Deletion](task-deletion.md) | Not Completed | None | Allows users to delete tasks from the system. |
+| [Task Completion](task-completion.md) | Completed | None | Enables users to mark tasks as complete. |
+| [Task Blocking](task-blocking.md) | Completed | None | Allows users to mark tasks as blocking other tasks. |
+| [Ancestor Blocking](ancestor-blocking.md) | Completed | [Task Blocking](task-blocking.md) | Enables blocking status to propagate up the task hierarchy. |
 
 ## Task Editing Epic
 
@@ -38,7 +44,7 @@ This epic focuses on features related to task creation and modification.
 |------------|--------|--------------|-------------|
 | [Item Edit](item-edit.md) | Not Completed | None | Provides comprehensive task editing capabilities. |
 | [Manual Type Override](manual-type-override.md) | Not Completed | None | Allows users to manually override task types. |
-| [Automatic Task Typing](automatic-task-typing.md) | Not Completed | None | Automatically determines task types based on content. |
+| [Task Type](task-type.md) | Not Completed | None | Defines the different types of tasks and their properties. |
 | [Focus on Item](focus-on-item.md) | Not Completed | None | Enables users to focus on and edit specific tasks. |
 
 ## Task Structure Epic
@@ -48,7 +54,7 @@ This epic focuses on hierarchical organization of tasks.
 | User Story | Status | Dependencies | Description |
 |------------|--------|--------------|-------------|
 | [Hierarchical Tasks](hierarchical-tasks.md) | Not Completed | None | Supports creating and managing task hierarchies. |
-| [Task Management](task-management.md) | Not Completed | None | Provides core task management functionality. |
+| [Subtask Creation](subtask-creation.md) | Not Completed | [Hierarchical Tasks](hierarchical-tasks.md) | Enables users to create subtasks within parent tasks. |
 
 ## Security Epic
 
