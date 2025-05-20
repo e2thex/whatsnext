@@ -3,13 +3,14 @@
 import { useState, useEffect } from 'react'
 import { useFilter } from '../contexts/FilterContext'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
-import { DraggableTaskItem } from './DraggableTaskItem'
 import { Task } from '../services/tasks'
 import { getDefaultIsExpanded, taskOrDescendantsMatchFilter } from '../utils/taskUtils'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { updateTask } from '../services/tasks'
 import { DndProvider } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
+import { TaskItem } from './TaskItem'
+import { useDraggableTask } from '../hooks/useDraggableTask'
 
 interface TreeViewProps {
   tasks: Task[]
@@ -31,6 +32,17 @@ const TreeNode = ({ task, level = 0, tasks, onMoveTask }: TreeNodeProps) => {
   const setIsExpanded = (value: boolean | null) => {
     setLocalIsExpanded(value)
   }
+
+  const {
+    ref,
+    dropBeforeRef,
+    dropAfterRef,
+    dropChildRef,
+    isDragging,
+    isOverBefore,
+    isOverAfter,
+    isOverChild
+  } = useDraggableTask({ task, tasks, onMoveTask })
 
   // Reset localIsExpanded when filter changes
   useEffect(() => {
@@ -57,13 +69,29 @@ const TreeNode = ({ task, level = 0, tasks, onMoveTask }: TreeNodeProps) => {
           )}
           {children.length === 0 && <div className="w-4" />}
         </div>
-        <div className="flex-1">
-          <DraggableTaskItem 
-            task={task}
-            tasks={tasks}
-            onMoveTask={onMoveTask}
-            showParentHierarchy={false}
-            className="flex-1"
+        <div className="flex-1 relative">
+          <div 
+            ref={dropBeforeRef}
+            className={`absolute -top-2 left-0 right-0 h-4 bg-blue-200 opacity-0 hover:opacity-100 transition-opacity ${isOverBefore ? 'opacity-100' : ''}`}
+          />
+          <div 
+            ref={ref}
+            className={`relative ${isDragging ? 'opacity-50' : ''}`}
+          >
+            <div 
+              ref={dropChildRef}
+              className="absolute -left-4 top-0 bottom-0 w-4 bg-blue-200 opacity-0 hover:opacity-100 transition-opacity"
+            />
+            <TaskItem 
+              task={task}
+              showParentHierarchy={false}
+              className="flex-1"
+              tasks={tasks}
+            />
+          </div>
+          <div 
+            ref={dropAfterRef}
+            className={`absolute -bottom-2 left-0 right-0 h-4 bg-blue-200 opacity-0 hover:opacity-100 transition-opacity ${isOverAfter ? 'opacity-100' : ''}`}
           />
         </div>
       </div>

@@ -1,15 +1,6 @@
 import { useRef } from 'react'
 import { useDrag, useDrop } from 'react-dnd'
 import { Task } from '../services/tasks'
-import { TaskItem } from './TaskItem'
-
-interface DraggableTaskItemProps {
-  task: Task
-  tasks: Task[]
-  onMoveTask: (draggedId: string, targetId: string, position: 'before' | 'after' | 'child') => void
-  showParentHierarchy?: boolean
-  className?: string
-}
 
 interface DragItem {
   type: 'task'
@@ -17,13 +8,24 @@ interface DragItem {
   parentId: string | null
 }
 
-export const DraggableTaskItem = ({ 
-  task, 
-  tasks, 
-  onMoveTask, 
-  showParentHierarchy = false, 
-  className = '' 
-}: DraggableTaskItemProps) => {
+interface UseDraggableTaskProps {
+  task: Task
+  tasks: Task[]
+  onMoveTask: (draggedId: string, targetId: string, position: 'before' | 'after' | 'child') => void
+}
+
+interface UseDraggableTaskResult {
+  ref: React.RefObject<HTMLDivElement>
+  dropBeforeRef: React.RefObject<HTMLDivElement>
+  dropAfterRef: React.RefObject<HTMLDivElement>
+  dropChildRef: React.RefObject<HTMLDivElement>
+  isDragging: boolean
+  isOverBefore: boolean
+  isOverAfter: boolean
+  isOverChild: boolean
+}
+
+export const useDraggableTask = ({ task, tasks, onMoveTask }: UseDraggableTaskProps): UseDraggableTaskResult => {
   const ref = useRef<HTMLDivElement>(null)
   const dropBeforeRef = useRef<HTMLDivElement>(null)
   const dropAfterRef = useRef<HTMLDivElement>(null)
@@ -44,7 +46,6 @@ export const DraggableTaskItem = ({
       onMoveTask(item.id, task.id, 'before')
     },
     canDrop: (item: DragItem) => {
-      // Prevent dropping a task into itself or its descendants
       const isDescendant = (taskId: string, parentId: string): boolean => {
         const task = tasks.find(t => t.id === taskId)
         if (!task) return false
@@ -80,7 +81,7 @@ export const DraggableTaskItem = ({
     }),
   })
 
-  const [, dropChild] = useDrop({
+  const [{ isOverChild }, dropChild] = useDrop({
     accept: 'task',
     drop: (item: DragItem) => {
       if (item.id === task.id) return
@@ -106,31 +107,14 @@ export const DraggableTaskItem = ({
   dropAfter(dropAfterRef)
   dropChild(dropChildRef)
 
-  return (
-    <div className="relative">
-      <div 
-        ref={dropBeforeRef}
-        className={`absolute -top-2 left-0 right-0 h-4 bg-blue-200 opacity-0 hover:opacity-100 transition-opacity ${isOverBefore ? 'opacity-100' : ''}`}
-      />
-      <div 
-        ref={ref}
-        className={`relative ${isDragging ? 'opacity-50' : ''}`}
-      >
-        <div 
-          ref={dropChildRef}
-          className="absolute -left-4 top-0 bottom-0 w-4 bg-blue-200 opacity-0 hover:opacity-100 transition-opacity"
-        />
-        <TaskItem 
-          task={task}
-          showParentHierarchy={showParentHierarchy}
-          className={className}
-          tasks={tasks}
-        />
-      </div>
-      <div 
-        ref={dropAfterRef}
-        className={`absolute -bottom-2 left-0 right-0 h-4 bg-blue-200 opacity-0 hover:opacity-100 transition-opacity ${isOverAfter ? 'opacity-100' : ''}`}
-      />
-    </div>
-  )
-} 
+  return {
+    ref,
+    dropBeforeRef,
+    dropAfterRef,
+    dropChildRef,
+    isDragging,
+    isOverBefore,
+    isOverAfter,
+    isOverChild
+  }
+}
