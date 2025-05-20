@@ -23,6 +23,7 @@ interface UseDraggableTaskResult {
   isOverBefore: boolean
   isOverAfter: boolean
   isOverChild: boolean
+  isAnyDragging: boolean
 }
 
 export const useDraggableTask = ({ task, tasks, onMoveTask }: UseDraggableTaskProps): UseDraggableTaskResult => {
@@ -81,7 +82,7 @@ export const useDraggableTask = ({ task, tasks, onMoveTask }: UseDraggableTaskPr
     }),
   })
 
-  const [{ isOverChild }, dropChild] = useDrop({
+  const [{ isOverChild, isAnyDragging }, dropChild] = useDrop({
     accept: 'task',
     drop: (item: DragItem) => {
       if (item.id === task.id) return
@@ -99,6 +100,7 @@ export const useDraggableTask = ({ task, tasks, onMoveTask }: UseDraggableTaskPr
     },
     collect: (monitor) => ({
       isOverChild: monitor.isOver(),
+      isAnyDragging: !!monitor.getItem(),
     }),
   })
 
@@ -115,6 +117,7 @@ export const useDraggableTask = ({ task, tasks, onMoveTask }: UseDraggableTaskPr
     isDragging,
     isOverBefore,
     isOverAfter,
-    isOverChild
+    isOverChild,
+    isAnyDragging
   }
 }

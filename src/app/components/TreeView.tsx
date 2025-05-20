@@ -41,7 +41,8 @@ const TreeNode = ({ task, level = 0, tasks, onMoveTask }: TreeNodeProps) => {
     isDragging,
     isOverBefore,
     isOverAfter,
-    isOverChild
+    isOverChild,
+    isAnyDragging
   } = useDraggableTask({ task, tasks, onMoveTask })
 
   // Reset localIsExpanded when filter changes
@@ -52,13 +53,17 @@ const TreeNode = ({ task, level = 0, tasks, onMoveTask }: TreeNodeProps) => {
   // Apply filters
   if (!taskOrDescendantsMatchFilter(task, tasks, filter)) return null
 
+  // Check if this is the last item at its level
+  const isLastAtLevel = (() => {
+    const siblings = tasks.filter(t => t.parent_id === task.parent_id)
+    const lastSibling = siblings[siblings.length - 1]
+    return lastSibling.id === task.id
+  })()
+
   return (
     <div key={task.id} className="pl-4">
       <div className="flex items-center py-2">
         <div className="flex items-center">
-          {level > 0 && (
-            <div className="w-4 h-px bg-gray-300 mr-2" />
-          )}
           {children.length > 0 && (
             <button
               onClick={() => setIsExpanded(!isExpanded)}
@@ -72,16 +77,22 @@ const TreeNode = ({ task, level = 0, tasks, onMoveTask }: TreeNodeProps) => {
         <div className="flex-1 relative">
           <div 
             ref={dropBeforeRef}
-            className={`absolute -top-2 left-0 right-0 h-4 bg-blue-200 opacity-0 hover:opacity-100 transition-opacity ${isOverBefore ? 'opacity-100' : ''}`}
+            className={`absolute -top-4 left-0 right-0 h-4 bg-blue-200 opacity-0 transition-opacity ${
+                  isAnyDragging ? 'block' : 'hidden'
+                } ${isOverBefore ? 'opacity-100' : ''}`}
           />
           <div 
             ref={ref}
-            className={`relative ${isDragging ? 'opacity-50' : ''}`}
+            className={`relative ${isDragging ? 'opacity-10' : ''}`}
           >
-            <div 
-              ref={dropChildRef}
-              className="absolute -left-4 top-0 bottom-0 w-4 bg-blue-200 opacity-0 hover:opacity-100 transition-opacity"
-            />
+            {children.length === 0 && (
+              <div 
+                ref={dropChildRef}
+                className={`absolute inset-0 bg-blue-200 opacity-0 transition-opacity duration-200 ${
+                  isAnyDragging && !isDragging ? 'block' : 'hidden'
+                } ${isOverChild ? 'opacity-100' : ''}`}
+              />
+            )}
             <TaskItem 
               task={task}
               showParentHierarchy={false}
@@ -89,10 +100,6 @@ const TreeNode = ({ task, level = 0, tasks, onMoveTask }: TreeNodeProps) => {
               tasks={tasks}
             />
           </div>
-          <div 
-            ref={dropAfterRef}
-            className={`absolute -bottom-2 left-0 right-0 h-4 bg-blue-200 opacity-0 hover:opacity-100 transition-opacity ${isOverAfter ? 'opacity-100' : ''}`}
-          />
         </div>
       </div>
       {isExpanded && children.map((child) => (
@@ -104,6 +111,12 @@ const TreeNode = ({ task, level = 0, tasks, onMoveTask }: TreeNodeProps) => {
           onMoveTask={onMoveTask}
         />
       ))}
+      {isLastAtLevel && (
+        <div 
+          ref={dropAfterRef}
+          className={`ml-4 h-4 bg-blue-200 opacity-0 transition-opacity ${isOverAfter ? 'opacity-100' : ''}`}
+        />
+      )}
     </div>
   )
 }
