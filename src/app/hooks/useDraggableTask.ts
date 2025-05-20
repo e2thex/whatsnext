@@ -15,10 +15,10 @@ interface UseDraggableTaskProps {
 }
 
 interface UseDraggableTaskResult {
-  ref: React.RefObject<HTMLDivElement>
-  dropBeforeRef: React.RefObject<HTMLDivElement>
-  dropAfterRef: React.RefObject<HTMLDivElement>
-  dropChildRef: React.RefObject<HTMLDivElement>
+  ref: React.RefObject<HTMLDivElement | null>
+  dropBeforeRef: React.RefObject<HTMLDivElement | null>
+  dropAfterRef: React.RefObject<HTMLDivElement | null>
+  dropChildRef: React.RefObject<HTMLDivElement | null>
   isDragging: boolean
   isOverBefore: boolean
   isOverAfter: boolean
