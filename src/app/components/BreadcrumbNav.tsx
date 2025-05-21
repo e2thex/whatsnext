@@ -13,7 +13,7 @@ interface BreadcrumbNavProps {
 }
 
 const BreadcrumbNav: React.FC<BreadcrumbNavProps> = ({ taskId }) => {
-  const { updateFilter } = useFilter();
+  const { updateFilter, filter } = useFilter();
 
   // Get parent hierarchy
   const { data: parentHierarchy = [] } = useQuery({
@@ -47,9 +47,21 @@ const BreadcrumbNav: React.FC<BreadcrumbNavProps> = ({ taskId }) => {
 
   if (!parentHierarchy.length) return null;
 
+  // In list view with a focused item, only show breadcrumbs after the focused item
+  const displayHierarchy = filter.viewMode === 'list' && filter.focusedItemId
+    ? (() => {
+        // Find the index of the focused item in the hierarchy
+        const focusedIndex = parentHierarchy.findIndex(parent => parent.id === filter.focusedItemId);
+        // If found, return everything after it, otherwise return the full hierarchy
+        return focusedIndex >= 0 ? parentHierarchy.slice(focusedIndex + 1) : parentHierarchy;
+      })()
+    : parentHierarchy;
+
+  if (!displayHierarchy.length) return null;
+
   return (
     <div className="mb-2 flex items-center text-sm text-gray-500">
-      {parentHierarchy.map((parent, index) => (
+      {displayHierarchy.map((parent, index) => (
         <span key={parent.id} className="flex items-center">
           {index > 0 && <span className="mx-1">/</span>}
           <button
