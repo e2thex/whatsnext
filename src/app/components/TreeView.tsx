@@ -62,7 +62,7 @@ const TreeNode = ({ task, level = 0, tasks, onMoveTask }: TreeNodeProps) => {
 
   return (
     <div key={task.id} className="pl-4">
-      <div className="flex items-center py-2">
+      <div className="flex items-center">
         <div className="flex items-center">
           {children.length > 0 && (
             <button
