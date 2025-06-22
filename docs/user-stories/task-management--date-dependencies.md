@@ -22,13 +22,22 @@ As a user, I want to add a date as a dependency so that a task is blocked until 
 9. ✓ Date dependencies can coexist with task dependencies (both must be satisfied for a task to be unblocked)
 10. ✓ Date dependency status is updated without requiring page refresh
 11. ✓ Date dependency are a blocker and work as such for calculating Parent block status
+12. ✓ Users can type natural language dates (e.g., "tomorrow", "next week", "in 3 days")
+13. ✓ Users can type date formats (e.g., "12/25", "2024-01-15", "14:30")
+14. ✓ Users can type days of the week (e.g., "monday", "next friday")
+15. ✓ The interface intelligently parses and suggests dates based on user input
+16. ✓ Users can press Enter to quickly add the first date suggestion
+17. ✓ Users receive immediate feedback via toast notifications for all operations
 
 ## Non-Functional Requirements
 
-1. Date selection UI should be intuitive with appropriate date and time controls
-2. Date dependency status should update automatically as time passes
-3. Date dependencies should be efficiently checked without excessive server load
-4. The system should handle timezone differences appropriately
+1. ✓ Date selection UI should be intuitive with appropriate date and time controls
+2. ✓ Date dependency status should update automatically as time passes
+3. ✓ Date dependencies should be efficiently checked without excessive server load
+4. ✓ The system should handle timezone differences appropriately
+5. ✓ Date parsing should be intelligent and support multiple formats
+6. ✓ The interface should provide visual feedback for parsed dates
+7. ✓ Loading states should provide clear feedback during operations
 
 ## Dependencies
 
@@ -36,14 +45,33 @@ As a user, I want to add a date as a dependency so that a task is blocked until 
 2. UI components for date selection
 3. Data persistence for date dependencies
 4. A mechanism for time-based task status updates
+5. Date parsing and validation logic
+6. Toast notification system
 
 ## Implementation Notes
 
-### Date Dependency UI
-- Implemented a date dependency section in the dependency management menu
-- Added a date/time picker for selecting the unblock date
-- The date selection UI defaults to future dates only
-- Date dependencies are displayed alongside task dependencies for a unified experience
+### Unified Date Dependency UI
+- Implemented date dependencies within the unified dependency modal
+- Created intelligent date parsing that supports natural language and multiple formats
+- Added smart date suggestions based on user input
+- Implemented keyboard shortcuts (Enter to add, Escape to close)
+- Added loading states and visual feedback for all operations
+
+### Intelligent Date Parsing
+- **Natural Language**: "tomorrow", "next week", "next month", "in 3 days/weeks/months"
+- **Time-based**: "tonight", "this evening", "this afternoon", "this morning"
+- **Day of Week**: "monday", "next friday", "tuesday"
+- **Date Formats**: "12/25", "MM/DD", "MM-DD", "YYYY-MM-DD"
+- **Time Formats**: "14:30", "HH:MM"
+- **Smart Logic**: Automatically adjusts year for past dates, sets appropriate default times
+
+### Enhanced User Experience
+- Users can type natural language and see intelligent date suggestions
+- Visual feedback shows the detected date in the help text
+- Enter key support for quick addition of the first date suggestion
+- Custom date picker pre-fills with parsed date when available
+- Toast notifications provide immediate feedback for success/error states
+- Loading states show "Adding..." text during operations
 
 ### Date Dependency Data Model
 - Created a `date_dependencies` table with fields for `task_id` and `unblock_at`
@@ -56,6 +84,7 @@ As a user, I want to add a date as a dependency so that a task is blocked until 
 - The dependency indicator includes date dependencies in its count
 - The dependency menu shows the specific date when the task will be unblocked
 - Date dependencies are visually distinguished from task dependencies in the menu
+- Calendar icons clearly indicate date dependencies vs task dependencies
 
 ### Date Dependency Logic
 - A task is considered blocked if the current time is before the `unblock_at` time
@@ -65,9 +94,14 @@ As a user, I want to add a date as a dependency so that a task is blocked until 
   3. When the user interacts with the task
 - If a task has both date and task dependencies, both must be satisfied for the task to be unblocked
 
-### User Experience Considerations
-- Users can add a date dependency with an intuitive date/time picker
-- Date dependencies can be removed with a single click
-- The UI converts UTC times to the user's local timezone for display
-- The dependency menu provides clear feedback about when a task will be unblocked
-- Date selection defaults to the next day to prevent accidental creation of immediately unblocked dependencies 
+### Accessibility Features
+- Proper ARIA labels for screen readers
+- Keyboard navigation support (Tab, Enter, Escape)
+- Focus management for modal interactions
+- Semantic HTML structure with appropriate roles
+
+### Performance Optimizations
+- Efficient date parsing without external libraries
+- Proper error handling with user-friendly messages
+- Optimistic updates for better perceived performance
+- Timezone-aware date handling 

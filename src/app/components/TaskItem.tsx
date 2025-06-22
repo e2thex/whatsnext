@@ -6,7 +6,7 @@ import { updateTask } from '../services/tasks'
 import { useFilter } from '../contexts/FilterContext'
 import { MagnifyingGlassIcon, PlusIcon, PencilIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { SlateTaskEditor } from './SlateTaskEditor'
-import { TaskBlockingButton } from './TaskBlockingModal'
+import { UnifiedDependencyButton } from './UnifiedDependencyButton'
 import { Task } from '../services/tasks'
 import typeIcons, { typeColors } from './typeIcons'
 import BreadcrumbNav from './BreadcrumbNav'
@@ -99,7 +99,7 @@ export const TaskItem = ({
           onChange={handleToggleComplete}
           className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
         />
-        <TaskBlockingButton task={task} className="ml-2" />
+        <UnifiedDependencyButton task={task} className="ml-2" />
         <div className="relative ml-2">
           <button
             onClick={() => setIsTypeDropdownOpen(!isTypeDropdownOpen)}

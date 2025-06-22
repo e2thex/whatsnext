@@ -24,12 +24,13 @@ This epic focuses on core task management features.
 
 | User Story | Status | Dependencies | Description |
 |------------|--------|--------------|-------------|
-| [Task Dependencies](task-management--task-dependencies.md) | Not Completed | None | Allows users to create and manage dependencies between tasks. |
+| [Task Dependencies](task-management--task-dependencies.md) | Completed | None | Allows users to create and manage dependencies between tasks with a unified smart interface. |
 | [Task Archiving](task-management--task-archiving.md) | Not Completed | None | Enables users to archive completed tasks while preserving history. |
 | [Task Due Dates](task-management--task-due-dates.md) | Not Completed | None | Allows users to set and manage due dates for tasks. |
 | [Task Progress](task-management--task-progress.md) | Not Completed | None | Provides visual indicators of task completion progress. |
 | [Task Questions](task-management--task-questions.md) | Not Completed | None | Enables users to add questions and answers to tasks. |
-| [Date Dependencies](task-management--date-dependencies.md) | Not Completed | [Task Dependencies](task-management--task-dependencies.md) | Allows users to create dependencies based on dates. |
+| [Date Dependencies](task-management--date-dependencies.md) | Completed | [Task Dependencies](task-management--task-dependencies.md) | Allows users to create dependencies based on dates with intelligent parsing. |
+| [Unified Dependency Interface](task-management--unified-dependency-interface.md) | Completed | [Task Dependencies](task-management--task-dependencies.md), [Date Dependencies](task-management--date-dependencies.md) | Provides a single, intelligent interface for managing all types of dependencies. |
 | [Task Creation](task-management--task-creation.md) | Not Completed | None | Enables users to create new tasks with various properties. |
 | [Task Deletion](task-management--task-deletion.md) | Not Completed | None | Allows users to delete tasks from the system. |
 | [Task Completion](task-management--task-completion.md) | Completed | None | Enables users to mark tasks as complete. |
